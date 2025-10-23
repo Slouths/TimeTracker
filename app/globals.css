@@ -1,26 +1,164 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Primary Brand Colors */
+  --midnight-slate: #023047;
+  --electric-violet: #219ebc;
+  --deep-indigo: #8ecae6;
+  --cyan-bright: #219ebc;
+  --sunset-orange: #ffb703;
+
+  /* Neutral Palette */
+  --ghost-white: #f8fafc;
+  --ash-gray: #f1f5f9;
+  --slate-900: #0f172a;
+  --slate-800: #1e293b;
+  --slate-700: #334155;
+  --slate-600: #475569;
+  --slate-500: #64748b;
+  --slate-400: #94a3b8;
+  --slate-300: #cbd5e1;
+  --slate-200: #e2e8f0;
+  --slate-100: #f1f5f9;
+  --pure-white: #ffffff;
+
+  /* Dark theme colors */
+  --card-bg: #034562;
+  --card-bg-hover: #045a7a;
+  --border-color: #0a5876;
+  --text-primary: #ffffff;
+  --text-secondary: #8ecae6;
+  --text-muted: #9bc4d4;
+
+  /* Color mappings for dark theme */
+  --color-card-bg: var(--card-bg);
+  --color-card-bg-hover: var(--card-bg-hover);
+  --color-border: var(--border-color);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  /* Legacy colors (for backwards compatibility) */
+  --background: var(--midnight-slate);
+  --foreground: var(--text-primary);
+  --brand-green: var(--electric-violet);
+  --brand-charcoal: var(--text-primary);
+  --brand-sky: var(--cyan-bright);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* Base colors */
+  --color-background: var(--ghost-white);
+  --color-foreground: var(--slate-700);
+
+  /* Brand colors (new palette) */
+  --color-midnight-slate: var(--midnight-slate);
+  --color-electric-violet: var(--electric-violet);
+  --color-deep-indigo: var(--deep-indigo);
+  --color-cyan-bright: var(--cyan-bright);
+  --color-sunset-orange: var(--sunset-orange);
+
+  /* Neutral palette */
+  --color-ghost-white: var(--ghost-white);
+  --color-ash-gray: var(--ash-gray);
+  --color-slate-900: var(--slate-900);
+  --color-slate-800: var(--slate-800);
+  --color-slate-700: var(--slate-700);
+  --color-slate-600: var(--slate-600);
+  --color-slate-500: var(--slate-500);
+  --color-slate-400: var(--slate-400);
+  --color-slate-300: var(--slate-300);
+  --color-slate-200: var(--slate-200);
+  --color-slate-100: var(--slate-100);
+  --color-pure-white: var(--pure-white);
+
+  /* Legacy brand colors (for backwards compatibility) */
+  --color-brand-green: var(--electric-violet);
+  --color-brand-charcoal: var(--slate-700);
+  --color-brand-sky: var(--cyan-bright);
+  --color-brand-amber: var(--sunset-orange);
+
+  /* Fonts */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Shadows (elevation system) */
+  --shadow-level-1: 0 1px 3px rgba(15, 20, 25, 0.08);
+  --shadow-level-2: 0 4px 12px rgba(15, 20, 25, 0.1);
+  --shadow-level-3: 0 8px 24px rgba(15, 20, 25, 0.12), 0 2px 6px rgba(15, 20, 25, 0.08);
+  --shadow-level-4: 0 16px 48px rgba(15, 20, 25, 0.18), 0 4px 12px rgba(15, 20, 25, 0.12);
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Spacing scale (8px increments) */
+  --spacing-1: 8px;
+  --spacing-2: 16px;
+  --spacing-3: 24px;
+  --spacing-4: 32px;
+  --spacing-5: 40px;
+  --spacing-6: 48px;
+  --spacing-7: 56px;
+  --spacing-8: 64px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Custom utility classes */
+@layer utilities {
+  .shadow-level-1 {
+    box-shadow: var(--shadow-level-1);
+  }
+
+  .shadow-level-2 {
+    box-shadow: var(--shadow-level-2);
+  }
+
+  .shadow-level-3 {
+    box-shadow: var(--shadow-level-3);
+  }
+
+  .shadow-level-4 {
+    box-shadow: var(--shadow-level-4);
+  }
+
+  .gradient-purple-dream {
+    background: linear-gradient(135deg, var(--electric-violet) 0%, var(--deep-indigo) 100%);
+  }
+
+  .gradient-cyber-glow {
+    background: linear-gradient(135deg, var(--cyan-bright) 0%, var(--electric-violet) 100%);
+  }
+
+  .gradient-sunset-blast {
+    background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--electric-violet) 100%);
+  }
+
+  .text-gradient-purple {
+    background: linear-gradient(135deg, var(--electric-violet) 0%, var(--deep-indigo) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ghost-white);
+  color: var(--slate-700);
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus ring for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--electric-violet);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
