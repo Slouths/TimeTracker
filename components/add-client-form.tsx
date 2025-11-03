@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Plus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from '@/lib/toast'
 
 interface Client {
   id: string
@@ -64,10 +65,12 @@ export function AddClientForm({
 
       if (error) {
         console.error('Error updating client:', error)
-        alert('Failed to update client')
+        toast.error('Failed to update client', error.message)
       } else {
         // Reset form
         resetForm()
+
+        toast.success('Client updated!', `${name} has been updated`)
 
         // Notify parent
         if (onCancelEdit) {
@@ -89,10 +92,12 @@ export function AddClientForm({
 
       if (error) {
         console.error('Error adding client:', error)
-        alert('Failed to add client')
+        toast.error('Failed to add client', error.message)
       } else {
         // Reset form
         resetForm()
+
+        toast.success('Client added!', `${name} has been added`)
 
         // Notify parent
         if (onClientAdded) {

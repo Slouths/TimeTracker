@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Pencil, Trash2, Users } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import { toast, confirm } from '@/lib/toast'
 
 interface Client {
   id: string
@@ -49,36 +50,38 @@ export function ClientsList({
   }, [userId, refreshTrigger, supabase])
 
   const handleDelete = async (clientId: string, clientName: string) => {
-    if (!confirm(`Are you sure you want to delete "${clientName}"? This cannot be undone.`)) {
-      return
-    }
+    confirm(
+      `Delete "${clientName}"? This cannot be undone.`,
+      async () => {
+        setDeletingId(clientId)
 
-    setDeletingId(clientId)
+        const { error } = await supabase
+          .from('clients')
+          .delete()
+          .eq('id', clientId)
 
-    const { error } = await supabase
-      .from('clients')
-      .delete()
-      .eq('id', clientId)
+        if (error) {
+          console.error('Error deleting client:', error)
+          toast.error('Failed to delete client', 'They may have existing time entries.')
+        } else {
+          // Remove from local state
+          setClients((prev) => prev.filter((c) => c.id !== clientId))
+          toast.success('Client deleted', `${clientName} has been removed`)
+        }
 
-    if (error) {
-      console.error('Error deleting client:', error)
-      alert('Failed to delete client. They may have existing time entries.')
-    } else {
-      // Remove from local state
-      setClients((prev) => prev.filter((c) => c.id !== clientId))
-    }
-
-    setDeletingId(null)
+        setDeletingId(null)
+      }
+    )
   }
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+      <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-slate-200 rounded w-1/4 mb-4"></div>
           <div className="space-y-3">
-            <div className="h-16 bg-gray-100 rounded-lg"></div>
-            <div className="h-16 bg-gray-100 rounded-lg"></div>
+            <div className="h-16 bg-slate-100 rounded"></div>
+            <div className="h-16 bg-slate-100 rounded"></div>
           </div>
         </div>
       </div>
@@ -87,62 +90,63 @@ export function ClientsList({
 
   if (clients.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-        <h3 className="text-xl font-bold text-brand-charcoal mb-4">
-          Your Clients
+      <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+        <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide mb-4">
+          Clients
         </h3>
-        <div className="text-center py-8 text-gray-500">
-          <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p className="font-medium">No clients yet.</p>
-          <p className="text-sm mt-1">Add your first client to get started!</p>
+        <div className="text-center py-12 px-4">
+          <p className="text-sm text-slate-600">No clients yet</p>
+          <p className="text-xs text-slate-500 mt-2">
+            Add your first client to start tracking time
+          </p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-      <h3 className="text-xl font-bold text-brand-charcoal mb-4">
-        Your Clients <span className="text-brand-green">({clients.length})</span>
+    <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+      <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide mb-4">
+        Clients ({clients.length})
       </h3>
 
       <div className="space-y-3">
         {clients.map((client) => (
           <div
             key={client.id}
-            className="bg-ash-gray rounded-lg p-4 hover:bg-gray-100 transition-colors group"
+            className="bg-slate-50 rounded border border-slate-200 p-3 hover:bg-slate-100 transition-colors"
           >
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <h4 className="font-semibold text-brand-charcoal">
+                <h4 className="font-semibold text-slate-950 text-sm">
                   {client.name}
                 </h4>
-                <p className="text-brand-green font-semibold">
+                <p className="text-slate-950 font-semibold font-mono text-sm">
                   ${client.hourly_rate.toFixed(2)}/hr
                 </p>
                 {(client.email || client.phone) && (
-                  <div className="mt-2 text-sm text-gray-600">
+                  <div className="mt-2 text-xs text-slate-600">
                     {client.email && <p>{client.email}</p>}
                     {client.phone && <p>{client.phone}</p>}
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <button
                   onClick={() => onEditClient?.(client)}
-                  className="p-2 text-gray-500 hover:text-brand-green hover:bg-brand-green/10 rounded-lg transition-colors"
+                  className="p-1.5 text-slate-500 hover:text-accent-primary hover:bg-accent-primary/10 rounded transition-colors"
                   title="Edit client"
                 >
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => handleDelete(client.id, client.name)}
                   disabled={deletingId === client.id}
-                  className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  className="p-1.5 text-slate-500 hover:text-error hover:bg-error/10 rounded transition-colors disabled:opacity-50"
                   title="Delete client"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>

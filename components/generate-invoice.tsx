@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { FileText, Download, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from '@/lib/toast'
 
 interface TimeEntry {
   id: string
@@ -62,7 +63,7 @@ export function GenerateInvoice({ userId, onClose }: GenerateInvoiceProps) {
 
   const handlePreview = async () => {
     if (!selectedClientId || !startDate || !endDate) {
-      alert('Please select a client and date range')
+      toast.error('Please select a client and date range')
       return
     }
 
@@ -90,7 +91,7 @@ export function GenerateInvoice({ userId, onClose }: GenerateInvoiceProps) {
         totalAmount,
       })
     } else {
-      alert('No time entries found for this client in the selected date range')
+      toast.warning('No time entries found for this client in the selected date range')
       setPreviewData(null)
     }
 
@@ -192,7 +193,7 @@ export function GenerateInvoice({ userId, onClose }: GenerateInvoiceProps) {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
 
-    alert('Invoice downloaded! Open the HTML file in your browser and print to PDF.')
+    toast.success('Invoice downloaded!', 'Open the HTML file in your browser and print to PDF.')
   }
 
   return (

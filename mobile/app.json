@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "TradeTimer - Time Tracking",
+    "slug": "tradetimer",
+    "version": "1.0.0",
+    "owner": "your-expo-username",
+    "privacy": "unlisted",
+    "orientation": "portrait",
+    "icon": "./src/assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./src/assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0369a1"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.tradetimer.app",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "icon": "./src/assets/icon.png",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Use Face ID to securely login to your TradeTimer account",
+        "NSCameraUsageDescription": "Take photos for time entry notes (optional feature)",
+        "NSPhotoLibraryUsageDescription": "Select photos for time entry notes (optional feature)"
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.tradetimer.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#0369a1"
+      },
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./src/assets/favicon.png"
+    },
+    "plugins": [
+      "expo-notifications",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow TradeTimer to use Face ID."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id-here"
+      }
+    }
+  }
+}

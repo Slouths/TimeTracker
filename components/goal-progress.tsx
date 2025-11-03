@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Target, Edit2 } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { Button } from './ui/button'
 
 interface GoalProgressProps {
@@ -37,10 +37,10 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
   const hoursProgress = Math.min((currentHours / hoursGoal) * 100, 100)
 
   const getProgressColor = (progress: number) => {
-    if (progress >= 100) return '#10b981' // green
-    if (progress >= 75) return '#219ebc' // brand-sky
-    if (progress >= 50) return '#f59e0b' // amber
-    return '#ef4444' // red
+    if (progress >= 100) return '#047857' // success
+    if (progress >= 75) return '#334155' // slate-800
+    if (progress >= 50) return '#c2410c' // warning
+    return '#b91c1c' // error
   }
 
   const CircularProgress = ({ progress, color, label, current, goal, unit }: {
@@ -63,8 +63,8 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
             cx="90"
             cy="90"
             r={radius}
-            stroke="#e5e7eb"
-            strokeWidth="12"
+            stroke="#e2e8f0"
+            strokeWidth="10"
             fill="none"
           />
           {/* Progress circle */}
@@ -73,11 +73,11 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
             cy="90"
             r={radius}
             stroke={color}
-            strokeWidth="12"
+            strokeWidth="10"
             fill="none"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
-            strokeLinecap="round"
+            strokeLinecap="butt"
             style={{ transition: 'stroke-dashoffset 0.5s ease' }}
           />
           {/* Percentage text */}
@@ -86,7 +86,7 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
             y="90"
             textAnchor="middle"
             dy="-10"
-            className="text-3xl font-bold fill-brand-charcoal transform rotate-90"
+            className="text-3xl font-bold fill-slate-950 transform rotate-90 font-mono"
             style={{ transformOrigin: '90px 90px' }}
           >
             {progress.toFixed(0)}%
@@ -96,17 +96,17 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
             y="90"
             textAnchor="middle"
             dy="15"
-            className="text-sm fill-gray-600 transform rotate-90"
+            className="text-xs fill-slate-600 transform rotate-90 uppercase tracking-wide"
             style={{ transformOrigin: '90px 90px' }}
           >
             {label}
           </text>
         </svg>
         <div className="mt-4 text-center">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-slate-600 font-mono">
             {current.toFixed(unit === '$' ? 2 : 1)}{unit === '$' ? '' : 'h'} / {goal.toFixed(0)}{unit === '$' ? '' : 'h'}
           </p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             {unit === '$' ? `$${(goal - current).toFixed(2)} to go` : `${(goal - current).toFixed(1)}h to go`}
           </p>
         </div>
@@ -115,14 +115,11 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+    <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Target className="h-6 w-6 text-brand-green" />
-          <h3 className="text-xl font-bold text-brand-charcoal">
-            Goal Progress
-          </h3>
-        </div>
+        <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide">
+          Goal Progress
+        </h3>
         <Button
           onClick={() => {
             setTempEarningsGoal(earningsGoal)
@@ -131,9 +128,9 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
           }}
           variant="outline"
           size="sm"
-          className="text-gray-600"
+          className="text-slate-600 border-slate-300 hover:bg-slate-50 text-xs uppercase tracking-wide"
         >
-          <Edit2 className="h-4 w-4 mr-2" />
+          <Pencil className="h-3 w-3 mr-1.5" />
           Edit Goals
         </Button>
       </div>
@@ -160,23 +157,23 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
       {/* Edit Goals Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
-            <h3 className="text-2xl font-bold text-brand-charcoal mb-6">
+          <div className="bg-white rounded-md shadow-md p-8 max-w-md w-full border border-slate-200">
+            <h3 className="text-xl font-bold text-slate-950 mb-6 uppercase tracking-wide">
               Set Your Goals
             </h3>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-brand-charcoal mb-2">
+                <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
                   Monthly Earnings Goal
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-gray-500">$</span>
+                  <span className="absolute left-3 top-2.5 text-slate-500 text-sm">$</span>
                   <input
                     type="number"
                     value={tempEarningsGoal}
                     onChange={(e) => setTempEarningsGoal(Number(e.target.value))}
-                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-transparent"
+                    className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent font-mono"
                     min="0"
                     step="100"
                   />
@@ -184,7 +181,7 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-brand-charcoal mb-2">
+                <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
                   Monthly Hours Goal
                 </label>
                 <div className="relative">
@@ -192,11 +189,11 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
                     type="number"
                     value={tempHoursGoal}
                     onChange={(e) => setTempHoursGoal(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-transparent"
+                    className="w-full px-3 py-2 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent font-mono"
                     min="0"
                     step="10"
                   />
-                  <span className="absolute right-3 top-2.5 text-gray-500">hours</span>
+                  <span className="absolute right-3 top-2.5 text-slate-500 text-sm">hours</span>
                 </div>
               </div>
             </div>
@@ -205,13 +202,13 @@ export function GoalProgress({ currentEarnings, currentHours, period }: GoalProg
               <Button
                 onClick={() => setShowEditModal(false)}
                 variant="outline"
-                className="flex-1"
+                className="flex-1 border-slate-300 text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </Button>
               <Button
                 onClick={saveGoals}
-                className="flex-1 bg-brand-green hover:bg-brand-green/90 text-white"
+                className="flex-1 bg-accent-primary hover:bg-accent-primary/90 text-white"
               >
                 Save Goals
               </Button>

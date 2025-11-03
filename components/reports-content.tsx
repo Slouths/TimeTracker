@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { DollarSign, Clock, Users, TrendingUp, FileText, ArrowUp, ArrowDown, Download } from 'lucide-react'
+import { FileText, Download, FileSpreadsheet, Save, Filter } from 'lucide-react'
 import { GenerateInvoice } from './generate-invoice'
 import { Button } from './ui/button'
 import { GoalProgress } from './goal-progress'
 import { TimeHeatmap } from './time-heatmap'
+import { generateTimeEntriesCSV, downloadCSV } from '@/lib/export-utils'
+import { generatePDFReport, formatDateForPDF } from '@/lib/pdf-utils'
+import { toast } from '@/lib/toast'
+import { SaveFilterModal } from './reports/save-filter-modal'
+import { getSavedFilters, deleteReportFilter, type ReportFilter } from '@/lib/report-filters'
 
 interface TimeEntry {
   id: string
@@ -15,6 +20,7 @@ interface TimeEntry {
   end_time: string
   duration_minutes: number
   amount: number
+  notes: string | null
   clients: {
     name: string
   }
@@ -26,8 +32,20 @@ interface ClientStats {
   totalHours: number
   totalEarnings: number
   entryCount: number
-  healthScore?: number
+  activityStatus?: 'active' | 'inactive' | 'dormant'
   lastEntryDate?: string
+  daysSinceLastEntry?: number
+}
+
+interface ProjectStats {
+  projectId: string
+  projectName: string
+  clientName: string
+  totalHours: number
+  totalEarnings: number
+  budget: number | null
+  percentUsed: number
+  status: 'active' | 'completed' | 'archived'
 }
 
 interface ReportsContentProps {
@@ -45,11 +63,58 @@ export function ReportsContent({ userId }: ReportsContentProps) {
   const [endDate, setEndDate] = useState('')
   const [showInvoiceGenerator, setShowInvoiceGenerator] = useState(false)
 
+  // New state for enhanced reporting
+  const [projects, setProjects] = useState<any[]>([])
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([])
+  const [showComparison, setShowComparison] = useState(false)
+  const [clients, setClients] = useState<any[]>([])
+
+  // Saved filters state
+  const [savedFilters, setSavedFilters] = useState<ReportFilter[]>([])
+  const [showSaveFilterModal, setShowSaveFilterModal] = useState(false)
+  const [showSavedFiltersDropdown, setShowSavedFiltersDropdown] = useState(false)
+
   const supabase = createClient()
 
   useEffect(() => {
     loadEntries()
-  }, [userId, timePeriod, startDate, endDate])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, timePeriod, startDate, endDate, selectedClientIds])
+
+  // Load clients, projects, and saved filters
+  useEffect(() => {
+    async function loadClientsAndProjects() {
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('id, name')
+        .eq('user_id', userId)
+        .order('name')
+
+      if (clientsData) {
+        setClients(clientsData)
+      }
+
+      const { data: projectsData } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          clients (
+            name
+          )
+        `)
+        .eq('user_id', userId)
+        .order('name')
+
+      if (projectsData) {
+        setProjects(projectsData)
+      }
+
+      // Load saved filters
+      const filters = await getSavedFilters(userId)
+      setSavedFilters(filters)
+    }
+    loadClientsAndProjects()
+  }, [userId, supabase])
 
   const loadEntries = async () => {
     setLoading(true)
@@ -104,6 +169,11 @@ export function ReportsContent({ userId }: ReportsContentProps) {
       const endDateTime = new Date(endDate)
       endDateTime.setHours(23, 59, 59, 999)
       query = query.lte('start_time', endDateTime.toISOString())
+    }
+
+    // Multi-client filter
+    if (selectedClientIds.length > 0) {
+      query = query.in('client_id', selectedClientIds)
     }
 
     const { data } = await query
@@ -200,33 +270,66 @@ export function ReportsContent({ userId }: ReportsContentProps) {
     }
   })
 
-  // Calculate health scores
+  // Calculate activity status (replaces health scores)
   clientMap.forEach((stats) => {
-    let healthScore = 100
-
-    // Factor 1: Recent activity (40 points)
     const daysSinceLastEntry = stats.lastEntryDate
       ? Math.floor((Date.now() - new Date(stats.lastEntryDate).getTime()) / (1000 * 60 * 60 * 24))
       : 999
-    if (daysSinceLastEntry > 30) healthScore -= 40
-    else if (daysSinceLastEntry > 14) healthScore -= 30
-    else if (daysSinceLastEntry > 7) healthScore -= 15
 
-    // Factor 2: Entry frequency (30 points)
-    const avgDaysBetweenEntries = timePeriod === 'month' ? 30 / (stats.entryCount || 1) : 0
-    if (avgDaysBetweenEntries > 10) healthScore -= 30
-    else if (avgDaysBetweenEntries > 5) healthScore -= 15
+    // Determine activity status
+    let activityStatus: 'active' | 'inactive' | 'dormant'
+    if (daysSinceLastEntry <= 7) {
+      activityStatus = 'active'
+    } else if (daysSinceLastEntry <= 30) {
+      activityStatus = 'inactive'
+    } else {
+      activityStatus = 'dormant'
+    }
 
-    // Factor 3: Earnings consistency (30 points)
-    const avgPerEntry = stats.totalEarnings / (stats.entryCount || 1)
-    if (avgPerEntry < 50) healthScore -= 30
-    else if (avgPerEntry < 100) healthScore -= 15
-
-    stats.healthScore = Math.max(0, Math.min(100, healthScore))
+    stats.activityStatus = activityStatus
+    stats.daysSinceLastEntry = daysSinceLastEntry
     clientStats.push(stats)
   })
 
   clientStats.sort((a, b) => b.totalEarnings - a.totalEarnings)
+
+  // Calculate project stats
+  const projectStats: ProjectStats[] = []
+  const projectMap = new Map<string, ProjectStats>()
+
+  entries.forEach((entry) => {
+    if (!entry.project_id) return
+
+    const project = projects.find((p) => p.id === entry.project_id)
+    if (!project) return
+
+    if (!projectMap.has(entry.project_id)) {
+      projectMap.set(entry.project_id, {
+        projectId: entry.project_id,
+        projectName: project.name,
+        clientName: project.clients?.name || 'Unknown',
+        totalHours: 0,
+        totalEarnings: 0,
+        budget: project.budget,
+        percentUsed: 0,
+        status: project.status,
+      })
+    }
+
+    const stats = projectMap.get(entry.project_id)!
+    stats.totalHours += entry.duration_minutes / 60
+    stats.totalEarnings += entry.amount
+  })
+
+  // Calculate percent used for each project
+  projectMap.forEach((stats) => {
+    if (stats.budget && stats.budget > 0) {
+      stats.percentUsed = (stats.totalEarnings / stats.budget) * 100
+    }
+    projectStats.push(stats)
+  })
+
+  projectStats.sort((a, b) => b.percentUsed - a.percentUsed)
 
   // Calculate earnings by day for chart
   const earningsByDay = new Map<string, number>()
@@ -260,135 +363,160 @@ export function ReportsContent({ userId }: ReportsContentProps) {
     }
   }
 
+  const exportToCSV = () => {
+    if (entries.length === 0) {
+      toast.warning('No data to export')
+      return
+    }
+
+    const csvContent = generateTimeEntriesCSV(entries)
+    const filename = `time-entries-${new Date().toISOString().split('T')[0]}.csv`
+    downloadCSV(csvContent, filename)
+    toast.success('CSV exported!', `${entries.length} entries exported`)
+  }
+
   const exportToPDF = () => {
-    const reportHTML = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>TradeTimer Report - ${getPeriodLabel()}</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; color: #334155; }
-    .header { text-align: center; margin-bottom: 40px; border-bottom: 3px solid #219ebc; padding-bottom: 20px; }
-    .company-name { font-size: 36px; font-weight: bold; color: #334155; margin-bottom: 10px; }
-    .report-title { font-size: 24px; color: #64748b; margin-bottom: 5px; }
-    .period { font-size: 14px; color: #94a3b8; }
-    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 30px 0; }
-    .stat-card { background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; text-align: center; }
-    .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; }
-    .stat-value { font-size: 28px; font-weight: bold; color: #334155; margin-bottom: 4px; }
-    .stat-change { font-size: 14px; margin-top: 8px; }
-    .positive { color: #10b981; }
-    .negative { color: #ef4444; }
-    .section-title { font-size: 20px; font-weight: bold; color: #334155; margin: 40px 0 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    th { background: #f1f5f9; padding: 12px; text-align: left; font-weight: bold; color: #334155; border-bottom: 2px solid #cbd5e1; }
-    td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
-    .text-right { text-align: right; }
-    .footer { margin-top: 60px; text-align: center; color: #94a3b8; font-size: 12px; border-top: 2px solid #e2e8f0; padding-top: 20px; }
-    @media print { body { margin: 0; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="company-name">TradeTimer</div>
-    <div class="report-title">Earnings & Analytics Report</div>
-    <div class="period">${getPeriodLabel()}</div>
-  </div>
+    if (entries.length === 0) {
+      toast.warning('No data to export')
+      return
+    }
 
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-label">Total Earnings</div>
-      <div class="stat-value">$${totalEarnings.toFixed(2)}</div>
-      ${previousEntries.length > 0 ? `
-        <div class="stat-change ${earningsChange >= 0 ? 'positive' : 'negative'}">
-          ${earningsChange >= 0 ? '▲' : '▼'} ${Math.abs(earningsChange).toFixed(1)}% vs previous
-        </div>
-      ` : ''}
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Total Hours</div>
-      <div class="stat-value">${totalHours.toFixed(1)}</div>
-      ${previousEntries.length > 0 ? `
-        <div class="stat-change ${hoursChange >= 0 ? 'positive' : 'negative'}">
-          ${hoursChange >= 0 ? '▲' : '▼'} ${Math.abs(hoursChange).toFixed(1)}% vs previous
-        </div>
-      ` : ''}
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Time Entries</div>
-      <div class="stat-value">${totalEntries}</div>
-      ${previousEntries.length > 0 ? `
-        <div class="stat-change ${entriesChange >= 0 ? 'positive' : 'negative'}">
-          ${entriesChange >= 0 ? '▲' : '▼'} ${Math.abs(entriesChange).toFixed(1)}% vs previous
-        </div>
-      ` : ''}
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Avg Rate</div>
-      <div class="stat-value">$${averageHourlyRate.toFixed(0)}/hr</div>
-      ${previousEntries.length > 0 ? `
-        <div class="stat-change ${rateChange >= 0 ? 'positive' : 'negative'}">
-          ${rateChange >= 0 ? '▲' : '▼'} ${Math.abs(rateChange).toFixed(1)}% vs previous
-        </div>
-      ` : ''}
-    </div>
-  </div>
+    // Prepare data for PDF generation
+    const reportData = {
+      startDate: startDate || (timePeriod === 'week' ? formatDateForPDF(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) :
+                 timePeriod === 'month' ? formatDateForPDF(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) :
+                 timePeriod === 'year' ? formatDateForPDF(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()) :
+                 'Beginning'),
+      endDate: endDate || formatDateForPDF(new Date().toISOString()),
+      totalEarnings,
+      totalHours,
+      totalEntries,
+      clientBreakdown: clientStats.map(stats => ({
+        clientName: stats.clientName,
+        hours: stats.totalHours,
+        entries: stats.entryCount,
+        amount: stats.totalEarnings,
+        avgRate: stats.totalHours > 0 ? stats.totalEarnings / stats.totalHours : 0,
+      })),
+    }
 
-  <div class="section-title">Breakdown by Client</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Client</th>
-        <th class="text-right">Hours</th>
-        <th class="text-right">Earnings</th>
-        <th class="text-right">Entries</th>
-        <th class="text-right">Avg Rate</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${clientStats.map(stats => `
-        <tr>
-          <td><strong>${stats.clientName}</strong></td>
-          <td class="text-right">${stats.totalHours.toFixed(1)}h</td>
-          <td class="text-right" style="color: #219ebc; font-weight: bold;">$${stats.totalEarnings.toFixed(2)}</td>
-          <td class="text-right">${stats.entryCount}</td>
-          <td class="text-right">$${stats.totalHours > 0 ? (stats.totalEarnings / stats.totalHours).toFixed(0) : 0}/hr</td>
-        </tr>
-      `).join('')}
-      <tr style="background: #f8fafc; font-weight: bold;">
-        <td>TOTAL</td>
-        <td class="text-right">${totalHours.toFixed(1)}h</td>
-        <td class="text-right" style="color: #219ebc;">$${totalEarnings.toFixed(2)}</td>
-        <td class="text-right">${totalEntries}</td>
-        <td class="text-right">$${averageHourlyRate.toFixed(0)}/hr</td>
-      </tr>
-    </tbody>
-  </table>
+    try {
+      generatePDFReport(reportData)
+      toast.success('PDF exported!', 'Your report has been downloaded')
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      toast.error('Failed to generate PDF', 'Please try again')
+    }
+  }
 
-  <div class="footer">
-    <p>Generated by TradeTimer on ${new Date().toLocaleDateString()}</p>
-    <p style="margin-top: 8px;">This report is for informational purposes. Please consult with a tax professional for tax-related questions.</p>
-  </div>
-</body>
-</html>
-    `
 
-    const blob = new Blob([reportHTML], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `TradeTimer-Report-${getPeriodLabel().replace(/\s+/g, '-')}-${Date.now()}.html`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+  // Helper to get activity status color and label
+  const getActivityStatus = (status: 'active' | 'inactive' | 'dormant') => {
+    switch (status) {
+      case 'active':
+        return { color: 'bg-success', label: 'Active', textColor: 'text-success' }
+      case 'inactive':
+        return { color: 'bg-warning', label: 'Inactive', textColor: 'text-warning' }
+      case 'dormant':
+        return { color: 'bg-error', label: 'Dormant', textColor: 'text-error' }
+    }
+  }
+
+  const getBudgetStatusColor = (percentUsed: number) => {
+    if (percentUsed < 90) return '#047857' // green
+    if (percentUsed < 100) return '#c2410c' // orange/yellow
+    return '#b91c1c' // red
+  }
+
+  const loadSavedFilter = (filter: ReportFilter) => {
+    setTimePeriod(filter.time_period)
+    setStartDate(filter.start_date || '')
+    setEndDate(filter.end_date || '')
+    setSelectedClientIds(filter.selected_clients || [])
+    setShowSavedFiltersDropdown(false)
+    toast.success('Filter loaded', `Applied "${filter.name}"`)
+  }
+
+  const handleDeleteFilter = async (filterId: string, filterName: string) => {
+    const success = await deleteReportFilter(filterId)
+    if (success) {
+      setSavedFilters(savedFilters.filter((f) => f.id !== filterId))
+      toast.success('Filter deleted', `"${filterName}" has been removed`)
+    } else {
+      toast.error('Failed to delete filter')
+    }
+  }
+
+  const handleFilterSaved = async () => {
+    const filters = await getSavedFilters(userId)
+    setSavedFilters(filters)
   }
 
   return (
     <div className="space-y-6">
       {/* Actions Bar */}
-      <div className="flex justify-end items-center gap-3">
+      <div className="flex justify-end items-center gap-3 flex-wrap">
+        <div className="relative">
+          <Button
+            onClick={() => setShowSavedFiltersDropdown(!showSavedFiltersDropdown)}
+            variant="outline"
+            size="lg"
+            className="border-slate-300 text-slate-700 hover:bg-slate-100"
+          >
+            <Filter className="h-5 w-5 mr-2" />
+            Saved Filters
+          </Button>
+          {showSavedFiltersDropdown && (
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+              {savedFilters.length === 0 ? (
+                <div className="p-4 text-sm text-gray-500 text-center">
+                  No saved filters yet
+                </div>
+              ) : (
+                <div className="max-h-96 overflow-y-auto">
+                  {savedFilters.map((filter) => (
+                    <div
+                      key={filter.id}
+                      className="flex items-center justify-between p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                    >
+                      <button
+                        onClick={() => loadSavedFilter(filter)}
+                        className="flex-1 text-left text-sm text-gray-900 hover:text-accent-primary"
+                      >
+                        {filter.name}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFilter(filter.id, filter.name)}
+                        className="text-gray-400 hover:text-error ml-2"
+                        title="Delete filter"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <Button
+          onClick={() => setShowSaveFilterModal(true)}
+          variant="outline"
+          size="lg"
+          className="border-slate-300 text-slate-700 hover:bg-slate-100"
+        >
+          <Save className="h-5 w-5 mr-2" />
+          Save Current Filter
+        </Button>
+        <Button
+          onClick={exportToCSV}
+          variant="outline"
+          size="lg"
+          className="border-accent-primary text-accent-primary hover:bg-accent-primary/10"
+        >
+          <FileSpreadsheet className="h-5 w-5 mr-2" />
+          Export CSV
+        </Button>
         <Button
           onClick={exportToPDF}
           variant="outline"
@@ -409,10 +537,23 @@ export function ReportsContent({ userId }: ReportsContentProps) {
       </div>
 
       {/* Time Period Filters */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-        <h3 className="text-xl font-bold text-brand-charcoal mb-4">
-          Time Period
-        </h3>
+      <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide">
+            Time Period
+          </h3>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showComparison}
+                onChange={(e) => setShowComparison(e.target.checked)}
+                className="rounded"
+              />
+              Compare Periods
+            </label>
+          </div>
+        </div>
 
         <div className="flex flex-wrap gap-3 mb-4">
           <button
@@ -421,10 +562,10 @@ export function ReportsContent({ userId }: ReportsContentProps) {
               setStartDate('')
               setEndDate('')
             }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
               timePeriod === 'week' && !startDate
-                ? 'bg-brand-green text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-slate-950 text-white'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
             }`}
           >
             Last 7 Days
@@ -435,10 +576,10 @@ export function ReportsContent({ userId }: ReportsContentProps) {
               setStartDate('')
               setEndDate('')
             }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
               timePeriod === 'month' && !startDate
-                ? 'bg-brand-green text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-slate-950 text-white'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
             }`}
           >
             Last 30 Days
@@ -449,10 +590,10 @@ export function ReportsContent({ userId }: ReportsContentProps) {
               setStartDate('')
               setEndDate('')
             }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
               timePeriod === 'year' && !startDate
-                ? 'bg-brand-green text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-slate-950 text-white'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
             }`}
           >
             Last Year
@@ -463,10 +604,10 @@ export function ReportsContent({ userId }: ReportsContentProps) {
               setStartDate('')
               setEndDate('')
             }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
               timePeriod === 'all' && !startDate
-                ? 'bg-brand-green text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-slate-950 text-white'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
             }`}
           >
             All Time
@@ -511,6 +652,49 @@ export function ReportsContent({ userId }: ReportsContentProps) {
             </div>
           </div>
         </div>
+
+        {/* Multi-Client Filter */}
+        <div className="border-t border-gray-200 pt-4 mt-4">
+          <p className="text-sm font-medium text-brand-charcoal mb-3">
+            Filter by Clients
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedClientIds([])}
+              className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                selectedClientIds.length === 0
+                  ? 'bg-slate-950 text-white'
+                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+              }`}
+            >
+              All Clients
+            </button>
+            {clients.map((client) => (
+              <button
+                key={client.id}
+                onClick={() => {
+                  if (selectedClientIds.includes(client.id)) {
+                    setSelectedClientIds(selectedClientIds.filter((id) => id !== client.id))
+                  } else {
+                    setSelectedClientIds([...selectedClientIds, client.id])
+                  }
+                }}
+                className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                  selectedClientIds.includes(client.id)
+                    ? 'bg-accent-primary text-white'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
+              >
+                {client.name}
+              </button>
+            ))}
+          </div>
+          {selectedClientIds.length > 0 && (
+            <p className="text-xs text-gray-500 mt-2">
+              {selectedClientIds.length} {selectedClientIds.length === 1 ? 'client' : 'clients'} selected
+            </p>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -520,95 +704,155 @@ export function ReportsContent({ userId }: ReportsContentProps) {
       ) : (
         <>
           {/* Summary Stats */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Total Earnings */}
-            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 text-center">
-              <DollarSign className="h-6 w-6 text-brand-green mx-auto mb-3" />
-              <p className="text-sm text-gray-600 mb-2">Total Earnings</p>
-              <p className="text-3xl font-bold text-brand-charcoal mb-2">
-                ${totalEarnings.toFixed(2)}
-              </p>
-              {previousEntries.length > 0 && (
-                <div className={`flex items-center justify-center gap-1 mb-2 ${earningsChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {earningsChange >= 0 ? (
-                    <ArrowUp className="h-4 w-4" />
-                  ) : (
-                    <ArrowDown className="h-4 w-4" />
-                  )}
-                  <span className="text-sm font-semibold">
-                    {Math.abs(earningsChange).toFixed(1)}%
-                  </span>
-                </div>
-              )}
-              <p className="text-xs text-gray-500">{getPeriodLabel()}</p>
+          {showComparison && previousEntries.length > 0 ? (
+            /* Comparison View */
+            <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide mb-6">
+                Period Comparison
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b-2 border-slate-300">
+                    <tr>
+                      <th className="text-left py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Metric
+                      </th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Current
+                      </th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Previous
+                      </th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Change
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-slate-100">
+                      <td className="py-3 px-3 font-medium text-slate-950">Earnings</td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-950">
+                        ${totalEarnings.toFixed(2)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-600">
+                        ${previousTotalEarnings.toFixed(2)}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-medium ${earningsChange >= 0 ? 'text-success' : 'text-error'}`}>
+                          {earningsChange >= 0 ? '▲' : '▼'} ${Math.abs(totalEarnings - previousTotalEarnings).toFixed(2)} ({Math.abs(earningsChange).toFixed(1)}%)
+                        </span>
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-100">
+                      <td className="py-3 px-3 font-medium text-slate-950">Hours</td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-950">
+                        {totalHours.toFixed(1)}h
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-600">
+                        {previousTotalHours.toFixed(1)}h
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-medium ${hoursChange >= 0 ? 'text-success' : 'text-error'}`}>
+                          {hoursChange >= 0 ? '▲' : '▼'} {Math.abs(totalHours - previousTotalHours).toFixed(1)}h ({Math.abs(hoursChange).toFixed(1)}%)
+                        </span>
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-100">
+                      <td className="py-3 px-3 font-medium text-slate-950">Entries</td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-950">
+                        {totalEntries}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-600">
+                        {previousTotalEntries}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-medium ${entriesChange >= 0 ? 'text-success' : 'text-error'}`}>
+                          {entriesChange >= 0 ? '▲' : '▼'} {Math.abs(totalEntries - previousTotalEntries)} ({Math.abs(entriesChange).toFixed(1)}%)
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-3 px-3 font-medium text-slate-950">Avg Rate</td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-950">
+                        ${averageHourlyRate.toFixed(0)}/hr
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-600">
+                        ${previousAverageHourlyRate.toFixed(0)}/hr
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`font-medium ${rateChange >= 0 ? 'text-success' : 'text-error'}`}>
+                          {rateChange >= 0 ? '▲' : '▼'} ${Math.abs(averageHourlyRate - previousAverageHourlyRate).toFixed(2)} ({Math.abs(rateChange).toFixed(1)}%)
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
+          ) : (
+            /* Standard View */
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Total Earnings */}
+              <div className="bg-white rounded border border-slate-200 p-6">
+                <p className="text-xs text-slate-600 uppercase font-semibold mb-2 tracking-wide">Total Earnings</p>
+                <p className="text-4xl font-bold text-slate-950 font-mono mb-2">
+                  ${totalEarnings.toFixed(2)}
+                </p>
+                {previousEntries.length > 0 && !showComparison && (
+                  <div className={`text-xs font-medium ${earningsChange >= 0 ? 'text-success' : 'text-error'}`}>
+                    <span>
+                      {earningsChange >= 0 ? '▲' : '▼'} {Math.abs(earningsChange).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              </div>
 
-            {/* Total Hours */}
-            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 text-center">
-              <Clock className="h-6 w-6 text-brand-green mx-auto mb-3" />
-              <p className="text-sm text-gray-600 mb-2">Total Hours</p>
-              <p className="text-3xl font-bold text-brand-charcoal mb-2">
-                {totalHours.toFixed(1)}
-              </p>
-              {previousEntries.length > 0 && (
-                <div className={`flex items-center justify-center gap-1 mb-2 ${hoursChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {hoursChange >= 0 ? (
-                    <ArrowUp className="h-4 w-4" />
-                  ) : (
-                    <ArrowDown className="h-4 w-4" />
-                  )}
-                  <span className="text-sm font-semibold">
-                    {Math.abs(hoursChange).toFixed(1)}%
-                  </span>
-                </div>
-              )}
-              <p className="text-xs text-gray-500">{getPeriodLabel()}</p>
-            </div>
+              {/* Total Hours */}
+              <div className="bg-white rounded border border-slate-200 p-6">
+                <p className="text-xs text-slate-600 uppercase font-semibold mb-2 tracking-wide">Total Hours</p>
+                <p className="text-4xl font-bold text-slate-950 font-mono mb-2">
+                  {totalHours.toFixed(1)}
+                </p>
+                {previousEntries.length > 0 && !showComparison && (
+                  <div className={`text-xs font-medium ${hoursChange >= 0 ? 'text-success' : 'text-error'}`}>
+                    <span>
+                      {hoursChange >= 0 ? '▲' : '▼'} {Math.abs(hoursChange).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              </div>
 
-            {/* Time Entries */}
-            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 text-center">
-              <Users className="h-6 w-6 text-brand-green mx-auto mb-3" />
-              <p className="text-sm text-gray-600 mb-2">Time Entries</p>
-              <p className="text-3xl font-bold text-brand-charcoal mb-2">
-                {totalEntries}
-              </p>
-              {previousEntries.length > 0 && (
-                <div className={`flex items-center justify-center gap-1 mb-2 ${entriesChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {entriesChange >= 0 ? (
-                    <ArrowUp className="h-4 w-4" />
-                  ) : (
-                    <ArrowDown className="h-4 w-4" />
-                  )}
-                  <span className="text-sm font-semibold">
-                    {Math.abs(entriesChange).toFixed(1)}%
-                  </span>
-                </div>
-              )}
-              <p className="text-xs text-gray-500">{getPeriodLabel()}</p>
-            </div>
+              {/* Time Entries */}
+              <div className="bg-white rounded border border-slate-200 p-6">
+                <p className="text-xs text-slate-600 uppercase font-semibold mb-2 tracking-wide">Time Entries</p>
+                <p className="text-4xl font-bold text-slate-950 font-mono mb-2">
+                  {totalEntries}
+                </p>
+                {previousEntries.length > 0 && !showComparison && (
+                  <div className={`text-xs font-medium ${entriesChange >= 0 ? 'text-success' : 'text-error'}`}>
+                    <span>
+                      {entriesChange >= 0 ? '▲' : '▼'} {Math.abs(entriesChange).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              </div>
 
-            {/* Average Rate */}
-            <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 text-center">
-              <TrendingUp className="h-6 w-6 text-brand-green mx-auto mb-3" />
-              <p className="text-sm text-gray-600 mb-2">Avg Rate</p>
-              <p className="text-3xl font-bold text-brand-charcoal mb-2">
-                ${averageHourlyRate.toFixed(0)}/hr
-              </p>
-              {previousEntries.length > 0 && (
-                <div className={`flex items-center justify-center gap-1 mb-2 ${rateChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {rateChange >= 0 ? (
-                    <ArrowUp className="h-4 w-4" />
-                  ) : (
-                    <ArrowDown className="h-4 w-4" />
-                  )}
-                  <span className="text-sm font-semibold">
-                    {Math.abs(rateChange).toFixed(1)}%
-                  </span>
-                </div>
-              )}
-              <p className="text-xs text-gray-500">{getPeriodLabel()}</p>
+              {/* Average Rate */}
+              <div className="bg-white rounded border border-slate-200 p-6">
+                <p className="text-xs text-slate-600 uppercase font-semibold mb-2 tracking-wide">Avg Rate</p>
+                <p className="text-4xl font-bold text-slate-950 font-mono mb-2">
+                  ${averageHourlyRate.toFixed(0)}/hr
+                </p>
+                {previousEntries.length > 0 && !showComparison && (
+                  <div className={`text-xs font-medium ${rateChange >= 0 ? 'text-success' : 'text-error'}`}>
+                    <span>
+                      {rateChange >= 0 ? '▲' : '▼'} {Math.abs(rateChange).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Goal Progress Rings */}
           {timePeriod === 'month' && !startDate && (
@@ -621,27 +865,27 @@ export function ReportsContent({ userId }: ReportsContentProps) {
 
           {/* Earnings Chart */}
           {chartData.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <h3 className="text-xl font-bold text-brand-charcoal mb-6">
+            <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide mb-6">
                 Daily Earnings Trend
               </h3>
               <div className="space-y-2">
                 {chartData.map((data, index) => (
                   <div key={index} className="flex items-center gap-4">
-                    <div className="w-28 text-sm text-gray-600 flex-shrink-0">
+                    <div className="w-28 text-xs text-slate-600 flex-shrink-0">
                       {data.date}
                     </div>
                     <div className="flex-1 flex items-center gap-3">
-                      <div className="flex-1 relative h-10 bg-gray-100 rounded-lg overflow-hidden">
+                      <div className="flex-1 relative h-8 bg-slate-100 rounded overflow-hidden">
                         <div
-                          className="absolute inset-y-0 left-0 bg-brand-green rounded-lg transition-all duration-300"
+                          className="absolute inset-y-0 left-0 bg-slate-800 rounded transition-all duration-300"
                           style={{
                             width: `${Math.max((data.amount / maxEarnings) * 100, 2)}%`
                           }}
                         />
                       </div>
                       <div className="w-20 text-right">
-                        <span className="font-semibold text-brand-charcoal text-sm">
+                        <span className="font-semibold text-slate-950 text-sm font-mono">
                           ${data.amount.toFixed(2)}
                         </span>
                       </div>
@@ -655,133 +899,226 @@ export function ReportsContent({ userId }: ReportsContentProps) {
           {/* Time Heatmap */}
           {entries.length > 0 && <TimeHeatmap entries={entries} />}
 
+          {/* Project Breakdown */}
+          {projectStats.length > 0 && (
+            <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide mb-6">
+                Project Breakdown
+              </h3>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Project
+                      </th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Client
+                      </th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Hours
+                      </th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Budget
+                      </th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Spent
+                      </th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Remaining
+                      </th>
+                      <th className="text-center py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        % Used
+                      </th>
+                      <th className="text-center py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectStats.map((stats) => {
+                      const budgetColor = getBudgetStatusColor(stats.percentUsed)
+                      const remaining = stats.budget ? stats.budget - stats.totalEarnings : 0
+
+                      return (
+                        <tr
+                          key={stats.projectId}
+                          className="border-b border-slate-100 hover:bg-slate-50"
+                        >
+                          <td className="py-3 px-3 font-semibold text-slate-950 text-sm">
+                            {stats.projectName}
+                          </td>
+                          <td className="py-3 px-3 text-slate-600 text-sm">
+                            {stats.clientName}
+                          </td>
+                          <td className="py-3 px-3 text-right text-slate-600 text-sm">
+                            {stats.totalHours.toFixed(1)}h
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-slate-950 text-sm">
+                            {stats.budget ? `$${stats.budget.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-slate-950 text-sm">
+                            ${stats.totalEarnings.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-slate-600 text-sm">
+                            {stats.budget ? `$${remaining.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="py-3 px-3">
+                            {stats.budget ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-sm font-medium" style={{ color: budgetColor }}>
+                                  {stats.percentUsed.toFixed(1)}%
+                                </span>
+                                <div className="w-full bg-slate-200 rounded-full h-2">
+                                  <div
+                                    className="h-2 rounded-full transition-all"
+                                    style={{
+                                      width: `${Math.min(stats.percentUsed, 100)}%`,
+                                      backgroundColor: budgetColor,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-slate-400">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span
+                              className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                                stats.status === 'active'
+                                  ? 'bg-success/10 text-success'
+                                  : stats.status === 'completed'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {stats.status}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Client Breakdown */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-            <h3 className="text-xl font-bold text-brand-charcoal mb-6">
+          <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide mb-6">
               Breakdown by Client
             </h3>
 
             {clientStats.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-slate-500">
                 <p className="font-medium">No data for this period</p>
               </div>
             ) : (
               <>
-                {/* Visual breakdown */}
-                <div className="mb-8">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-sm font-medium text-gray-600">Revenue Distribution</span>
-                  </div>
-                  <div className="flex h-12 rounded-lg overflow-hidden">
-                    {clientStats.map((stats, index) => {
-                      const percentage = (stats.totalEarnings / totalEarnings) * 100
-                      const colors = [
-                        'bg-brand-green',
-                        'bg-brand-sky',
-                        'bg-brand-amber',
-                        'bg-purple-500',
-                        'bg-pink-500',
-                        'bg-indigo-500',
-                      ]
-                      const color = colors[index % colors.length]
+                {/* Mobile Cards View */}
+                <div className="md:hidden space-y-3">
+                  {clientStats.map((stats) => {
+                    const activity = getActivityStatus(stats.activityStatus || 'dormant')
 
-                      return percentage > 0 ? (
-                        <div
-                          key={stats.clientId}
-                          className={`${color} flex items-center justify-center text-white text-sm font-semibold transition-all hover:opacity-80 cursor-pointer group relative`}
-                          style={{ width: `${percentage}%` }}
-                          title={`${stats.clientName}: $${stats.totalEarnings.toFixed(2)} (${percentage.toFixed(1)}%)`}
-                        >
-                          {percentage > 10 && (
-                            <span className="truncate px-2">
-                              {percentage.toFixed(0)}%
+                    return (
+                      <div
+                        key={stats.clientId}
+                        className="bg-slate-50 rounded-md border border-slate-200 p-4"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <h4 className="font-semibold text-slate-950 text-base">
+                            {stats.clientName}
+                          </h4>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${activity.color}`}></div>
+                            <span className={`text-xs font-medium ${activity.textColor}`}>
+                              {activity.label}
                             </span>
-                          )}
+                          </div>
                         </div>
-                      ) : null
-                    })}
-                  </div>
-                  <div className="flex flex-wrap gap-4 mt-4">
-                    {clientStats.slice(0, 6).map((stats, index) => {
-                      const colors = [
-                        'bg-brand-green',
-                        'bg-brand-sky',
-                        'bg-brand-amber',
-                        'bg-purple-500',
-                        'bg-pink-500',
-                        'bg-indigo-500',
-                      ]
-                      const color = colors[index % colors.length]
-                      const percentage = (stats.totalEarnings / totalEarnings) * 100
-
-                      return (
-                        <div key={stats.clientId} className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${color}`}></div>
-                          <span className="text-sm text-gray-700">
-                            {stats.clientName} ({percentage.toFixed(1)}%)
-                          </span>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-xs text-slate-600 mb-1">Hours</p>
+                            <p className="font-semibold text-slate-950">{stats.totalHours.toFixed(1)}h</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-600 mb-1">Entries</p>
+                            <p className="font-semibold text-slate-950">{stats.entryCount}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-600 mb-1">Earnings</p>
+                            <p className="font-bold text-slate-950 font-mono text-base">
+                              ${stats.totalEarnings.toFixed(2)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-600 mb-1">Avg Rate</p>
+                            <p className="font-semibold text-slate-950 font-mono">
+                              ${stats.totalHours > 0 ? (stats.totalEarnings / stats.totalHours).toFixed(0) : 0}/hr
+                            </p>
+                          </div>
                         </div>
-                      )
-                    })}
-                  </div>
+                      </div>
+                    )
+                  })}
                 </div>
 
-                {/* Detailed table */}
-                <div className="overflow-x-auto">
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 text-xs font-semibold uppercase text-gray-600">
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
                         Client
                       </th>
-                      <th className="text-center py-3 px-4 text-xs font-semibold uppercase text-gray-600">
-                        Health
+                      <th className="text-center py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
+                        Activity
                       </th>
-                      <th className="text-right py-3 px-4 text-xs font-semibold uppercase text-gray-600">
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
                         Hours
                       </th>
-                      <th className="text-right py-3 px-4 text-xs font-semibold uppercase text-gray-600">
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
                         Earnings
                       </th>
-                      <th className="text-right py-3 px-4 text-xs font-semibold uppercase text-gray-600">
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
                         Entries
                       </th>
-                      <th className="text-right py-3 px-4 text-xs font-semibold uppercase text-gray-600">
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase text-slate-600 tracking-wide">
                         Avg Rate
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {clientStats.map((stats) => {
-                      const healthColor =
-                        (stats.healthScore || 0) >= 75 ? 'bg-green-500' :
-                        (stats.healthScore || 0) >= 50 ? 'bg-yellow-500' :
-                        'bg-red-500'
+                      const activity = getActivityStatus(stats.activityStatus || 'dormant')
 
                       return (
                         <tr
                           key={stats.clientId}
-                          className="border-b border-gray-100 hover:bg-gray-50"
+                          className="border-b border-slate-100 hover:bg-slate-50"
                         >
-                          <td className="py-3 px-4 font-semibold text-brand-charcoal">
+                          <td className="py-3 px-3 font-semibold text-slate-950 text-sm">
                             {stats.clientName}
                           </td>
-                          <td className="py-3 px-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <div className={`w-3 h-3 rounded-full ${healthColor}`} title={`Health Score: ${stats.healthScore}`}></div>
-                              <span className="text-xs text-gray-600">{stats.healthScore}%</span>
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex items-center justify-center gap-2" title={`Last entry: ${stats.daysSinceLastEntry} days ago`}>
+                              <div className={`w-2 h-2 rounded-full ${activity.color}`}></div>
+                              <span className={`text-xs font-medium ${activity.textColor}`}>{activity.label}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-right text-gray-600">
+                          <td className="py-3 px-3 text-right text-slate-600 text-sm">
                             {stats.totalHours.toFixed(1)}h
                           </td>
-                          <td className="py-3 px-4 text-right font-bold text-brand-green">
+                          <td className="py-3 px-3 text-right font-bold text-slate-950 font-mono text-sm">
                             ${stats.totalEarnings.toFixed(2)}
                           </td>
-                          <td className="py-3 px-4 text-right text-gray-600">
+                          <td className="py-3 px-3 text-right text-slate-600 text-sm">
                             {stats.entryCount}
                           </td>
-                          <td className="py-3 px-4 text-right text-gray-600">
+                          <td className="py-3 px-3 text-right text-slate-600 text-sm font-mono">
                             $
                             {stats.totalHours > 0
                               ? (stats.totalEarnings / stats.totalHours).toFixed(
@@ -795,19 +1132,19 @@ export function ReportsContent({ userId }: ReportsContentProps) {
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-gray-50 font-bold">
-                      <td className="py-3 px-4 text-brand-charcoal">Total</td>
-                      <td className="py-3 px-4 text-center text-brand-charcoal">—</td>
-                      <td className="py-3 px-4 text-right text-brand-charcoal">
+                    <tr className="bg-slate-50 font-bold border-t-2 border-slate-300">
+                      <td className="py-3 px-3 text-slate-950 text-sm">Total</td>
+                      <td className="py-3 px-3 text-center text-slate-950">—</td>
+                      <td className="py-3 px-3 text-right text-slate-950 text-sm">
                         {totalHours.toFixed(1)}h
                       </td>
-                      <td className="py-3 px-4 text-right text-brand-green">
+                      <td className="py-3 px-3 text-right text-slate-950 font-mono text-sm">
                         ${totalEarnings.toFixed(2)}
                       </td>
-                      <td className="py-3 px-4 text-right text-brand-charcoal">
+                      <td className="py-3 px-3 text-right text-slate-950 text-sm">
                         {totalEntries}
                       </td>
-                      <td className="py-3 px-4 text-right text-brand-charcoal">
+                      <td className="py-3 px-3 text-right text-slate-950 font-mono text-sm">
                         ${averageHourlyRate.toFixed(0)}/hr
                       </td>
                     </tr>
@@ -825,6 +1162,19 @@ export function ReportsContent({ userId }: ReportsContentProps) {
         <GenerateInvoice
           userId={userId}
           onClose={() => setShowInvoiceGenerator(false)}
+        />
+      )}
+
+      {/* Save Filter Modal */}
+      {showSaveFilterModal && (
+        <SaveFilterModal
+          userId={userId}
+          timePeriod={timePeriod}
+          startDate={startDate}
+          endDate={endDate}
+          selectedClients={selectedClientIds}
+          onClose={() => setShowSaveFilterModal(false)}
+          onSaved={handleFilterSaved}
         />
       )}
     </div>

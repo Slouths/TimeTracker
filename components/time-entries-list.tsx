@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Clock, Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import { toast, confirm } from '@/lib/toast'
+import { AddTimeEntryModal } from './add-time-entry-modal'
 
 interface TimeEntry {
   id: string
@@ -32,6 +34,7 @@ export function TimeEntriesList({
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 
   const supabase = createClient()
 
@@ -88,37 +91,39 @@ export function TimeEntriesList({
   }
 
   const handleDelete = async (entryId: string, clientName: string) => {
-    if (!confirm(`Are you sure you want to delete this time entry for ${clientName}? This cannot be undone.`)) {
-      return
-    }
+    confirm(
+      `Delete time entry for ${clientName}? This cannot be undone.`,
+      async () => {
+        setDeletingId(entryId)
 
-    setDeletingId(entryId)
+        const { error } = await supabase
+          .from('time_entries')
+          .delete()
+          .eq('id', entryId)
 
-    const { error } = await supabase
-      .from('time_entries')
-      .delete()
-      .eq('id', entryId)
+        if (error) {
+          console.error('Error deleting time entry:', error)
+          toast.error('Failed to delete time entry', error.message)
+        } else {
+          // Remove from local state
+          setEntries((prev) => prev.filter((e) => e.id !== entryId))
+          toast.success('Time entry deleted', `Entry for ${clientName} has been removed`)
+        }
 
-    if (error) {
-      console.error('Error deleting time entry:', error)
-      alert('Failed to delete time entry')
-    } else {
-      // Remove from local state
-      setEntries((prev) => prev.filter((e) => e.id !== entryId))
-    }
-
-    setDeletingId(null)
+        setDeletingId(null)
+      }
+    )
   }
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+      <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-slate-200 rounded w-1/4 mb-4"></div>
           <div className="space-y-3">
-            <div className="h-16 bg-gray-100 rounded-lg"></div>
-            <div className="h-16 bg-gray-100 rounded-lg"></div>
-            <div className="h-16 bg-gray-100 rounded-lg"></div>
+            <div className="h-16 bg-slate-100 rounded"></div>
+            <div className="h-16 bg-slate-100 rounded"></div>
+            <div className="h-16 bg-slate-100 rounded"></div>
           </div>
         </div>
       </div>
@@ -127,81 +132,134 @@ export function TimeEntriesList({
 
   if (entries.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-        <h3 className="text-xl font-bold text-brand-charcoal mb-4">
+      <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+        <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide mb-4">
           Recent Time Entries
         </h3>
-        <div className="text-center py-8 text-gray-500">
-          <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p className="font-medium">No time entries yet.</p>
-          <p className="text-sm mt-1">Start tracking time to see entries here!</p>
+        <div className="text-center py-12 px-4">
+          <p className="text-sm text-slate-600">No time entries yet</p>
+          <p className="text-xs text-slate-500 mt-2">
+            Start the timer above to track your first session
+          </p>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-      <h3 className="text-xl font-bold text-brand-charcoal mb-4">
-        Recent Time Entries
-      </h3>
+  const handleRefresh = () => {
+    // Trigger a reload by updating refreshTrigger in parent
+    const loadEntries = async () => {
+      const { data } = await supabase
+        .from('time_entries')
+        .select(
+          `
+          *,
+          clients (
+            name
+          )
+        `
+        )
+        .eq('user_id', userId)
+        .order('start_time', { ascending: false })
+        .limit(10)
 
-      <div className="space-y-3">
+      if (data) {
+        setEntries(data as TimeEntry[])
+      }
+    }
+    loadEntries()
+  }
+
+  return (
+    <>
+      <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide">
+            Recent Time Entries
+          </h3>
+          <Button
+            onClick={() => setIsAddModalOpen(true)}
+            className="bg-accent-primary hover:bg-accent-primary/90 text-white px-3 py-1.5 rounded font-medium transition-colors text-xs flex items-center gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Entry
+          </Button>
+        </div>
+
+        <div className="space-y-3">
         {entries.map((entry) => (
           <div
             key={entry.id}
-            className="bg-ash-gray rounded-lg p-4 hover:bg-gray-100 transition-colors group"
+            className="bg-slate-50 rounded border border-slate-200 p-3 hover:bg-slate-100 transition-colors"
           >
             <div className="flex justify-between items-start mb-2">
               <div className="flex-1">
-                <p className="font-semibold text-brand-charcoal">
+                <p className="font-semibold text-slate-950 text-sm">
                   {entry.clients.name}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs text-slate-600 mt-0.5">
                   {formatDate(entry.start_time)}
                 </p>
               </div>
               <div className="text-right flex-1">
-                <p className="font-bold text-lg text-brand-green">
+                <p className="font-bold text-lg text-slate-950 font-mono">
                   ${entry.amount.toFixed(2)}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs text-slate-600">
                   {formatDuration(entry.duration_minutes)}
                 </p>
               </div>
-              <div className="flex gap-2 ml-4">
+              <div className="flex gap-1 ml-4">
                 <button
                   onClick={() => onEditEntry?.(entry)}
-                  className="p-2 text-gray-500 hover:text-brand-green hover:bg-brand-green/10 rounded-lg transition-colors"
+                  className="p-1.5 text-slate-500 hover:text-accent-primary hover:bg-accent-primary/10 rounded transition-colors"
                   title="Edit entry"
                 >
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => handleDelete(entry.id, entry.clients.name)}
                   disabled={deletingId === entry.id}
-                  className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  className="p-1.5 text-slate-500 hover:text-error hover:bg-error/10 rounded transition-colors disabled:opacity-50"
                   title="Delete entry"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-4 text-sm text-gray-600">
+            <div className="flex items-center gap-4 text-xs text-slate-600">
               <span>
                 {formatTime(entry.start_time)} → {formatTime(entry.end_time)}
               </span>
             </div>
 
             {entry.notes && (
-              <p className="text-sm text-gray-600 mt-2 italic">
+              <p className="text-xs text-slate-600 mt-2 italic">
                 &quot;{entry.notes}&quot;
               </p>
             )}
           </div>
         ))}
+        </div>
+
+        {/* View All Link */}
+        <div className="mt-4 text-center">
+          <a
+            href="/time-entries"
+            className="text-sm text-accent-primary hover:text-accent-primary/80 font-medium"
+          >
+            View All Entries →
+          </a>
+        </div>
       </div>
-    </div>
+
+      <AddTimeEntryModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        userId={userId}
+        onSaved={handleRefresh}
+      />
+    </>
   )
 }

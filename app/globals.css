@@ -1,66 +1,44 @@
 @import "tailwindcss";
 
 :root {
-  /* Primary Brand Colors */
-  --midnight-slate: #023047;
-  --electric-violet: #219ebc;
-  --deep-indigo: #8ecae6;
-  --cyan-bright: #219ebc;
-  --sunset-orange: #ffb703;
-
-  /* Neutral Palette */
-  --ghost-white: #f8fafc;
-  --ash-gray: #f1f5f9;
-  --slate-900: #0f172a;
-  --slate-800: #1e293b;
-  --slate-700: #334155;
-  --slate-600: #475569;
-  --slate-500: #64748b;
-  --slate-400: #94a3b8;
-  --slate-300: #cbd5e1;
-  --slate-200: #e2e8f0;
-  --slate-100: #f1f5f9;
+  /* Professional Grayscale Palette */
+  --slate-950: #0f172a;
+  --slate-900: #1e293b;
+  --slate-800: #334155;
+  --slate-700: #475569;
+  --slate-600: #64748b;
+  --slate-500: #94a3b8;
+  --slate-400: #cbd5e1;
+  --slate-300: #e2e8f0;
+  --slate-200: #f1f5f9;
+  --slate-100: #f8fafc;
+  --slate-50: #f8fafc;
   --pure-white: #ffffff;
 
-  /* Dark theme colors */
-  --card-bg: #034562;
-  --card-bg-hover: #045a7a;
-  --border-color: #0a5876;
-  --text-primary: #ffffff;
-  --text-secondary: #8ecae6;
-  --text-muted: #9bc4d4;
+  /* Professional Accent Colors (surgical use only) */
+  --accent-primary: #0369a1; /* sky-700 */
+  --success: #047857; /* emerald-700 */
+  --warning: #c2410c; /* orange-700 */
+  --error: #b91c1c; /* red-700 */
 
-  /* Color mappings for dark theme */
-  --color-card-bg: var(--card-bg);
-  --color-card-bg-hover: var(--card-bg-hover);
-  --color-border: var(--border-color);
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-muted: var(--text-muted);
-
-  /* Legacy colors (for backwards compatibility) */
-  --background: var(--midnight-slate);
-  --foreground: var(--text-primary);
-  --brand-green: var(--electric-violet);
-  --brand-charcoal: var(--text-primary);
-  --brand-sky: var(--cyan-bright);
+  /* Legacy color mappings (for backwards compatibility) */
+  --background: var(--slate-50);
+  --foreground: var(--slate-900);
+  --brand-green: var(--accent-primary);
+  --brand-charcoal: var(--slate-900);
+  --brand-sky: var(--accent-primary);
+  --brand-amber: var(--warning);
+  --ghost-white: var(--slate-50);
+  --ash-gray: var(--slate-200);
 }
 
 @theme inline {
   /* Base colors */
-  --color-background: var(--ghost-white);
-  --color-foreground: var(--slate-700);
+  --color-background: var(--slate-50);
+  --color-foreground: var(--slate-900);
 
-  /* Brand colors (new palette) */
-  --color-midnight-slate: var(--midnight-slate);
-  --color-electric-violet: var(--electric-violet);
-  --color-deep-indigo: var(--deep-indigo);
-  --color-cyan-bright: var(--cyan-bright);
-  --color-sunset-orange: var(--sunset-orange);
-
-  /* Neutral palette */
-  --color-ghost-white: var(--ghost-white);
-  --color-ash-gray: var(--ash-gray);
+  /* Professional palette */
+  --color-slate-950: var(--slate-950);
   --color-slate-900: var(--slate-900);
   --color-slate-800: var(--slate-800);
   --color-slate-700: var(--slate-700);
@@ -70,82 +48,64 @@
   --color-slate-300: var(--slate-300);
   --color-slate-200: var(--slate-200);
   --color-slate-100: var(--slate-100);
+  --color-slate-50: var(--slate-50);
   --color-pure-white: var(--pure-white);
 
-  /* Legacy brand colors (for backwards compatibility) */
-  --color-brand-green: var(--electric-violet);
-  --color-brand-charcoal: var(--slate-700);
-  --color-brand-sky: var(--cyan-bright);
-  --color-brand-amber: var(--sunset-orange);
+  /* Accent colors */
+  --color-accent-primary: var(--accent-primary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+
+  /* Legacy color mappings */
+  --color-brand-green: var(--accent-primary);
+  --color-brand-charcoal: var(--slate-900);
+  --color-brand-sky: var(--accent-primary);
+  --color-brand-amber: var(--warning);
+  --color-ghost-white: var(--slate-50);
+  --color-ash-gray: var(--slate-200);
 
   /* Fonts */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Shadows (elevation system) */
-  --shadow-level-1: 0 1px 3px rgba(15, 20, 25, 0.08);
-  --shadow-level-2: 0 4px 12px rgba(15, 20, 25, 0.1);
-  --shadow-level-3: 0 8px 24px rgba(15, 20, 25, 0.12), 0 2px 6px rgba(15, 20, 25, 0.08);
-  --shadow-level-4: 0 16px 48px rgba(15, 20, 25, 0.18), 0 4px 12px rgba(15, 20, 25, 0.12);
+  /* Professional Shadows (subtle only) */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 
-  /* Border radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  /* Border radius (sharp, minimal) */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
 
-  /* Spacing scale (8px increments) */
+  /* Spacing scale (8px grid system) */
   --spacing-1: 8px;
   --spacing-2: 16px;
   --spacing-3: 24px;
   --spacing-4: 32px;
   --spacing-5: 40px;
   --spacing-6: 48px;
-  --spacing-7: 56px;
-  --spacing-8: 64px;
 }
 
 /* Custom utility classes */
 @layer utilities {
-  .shadow-level-1 {
-    box-shadow: var(--shadow-level-1);
+  /* Monospace for numbers */
+  .text-mono {
+    font-family: var(--font-mono), 'Courier New', monospace;
+    font-variant-numeric: tabular-nums;
   }
 
-  .shadow-level-2 {
-    box-shadow: var(--shadow-level-2);
+  /* Professional shadows */
+  .shadow-professional {
+    box-shadow: var(--shadow-md);
   }
 
-  .shadow-level-3 {
-    box-shadow: var(--shadow-level-3);
-  }
-
-  .shadow-level-4 {
-    box-shadow: var(--shadow-level-4);
-  }
-
-  .gradient-purple-dream {
-    background: linear-gradient(135deg, var(--electric-violet) 0%, var(--deep-indigo) 100%);
-  }
-
-  .gradient-cyber-glow {
-    background: linear-gradient(135deg, var(--cyan-bright) 0%, var(--electric-violet) 100%);
-  }
-
-  .gradient-sunset-blast {
-    background: linear-gradient(135deg, var(--sunset-orange) 0%, var(--electric-violet) 100%);
-  }
-
-  .text-gradient-purple {
-    background: linear-gradient(135deg, var(--electric-violet) 0%, var(--deep-indigo) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
+  /* Removed: All gradient utilities (professional design uses solid colors only) */
 }
 
 body {
-  background: var(--ghost-white);
-  color: var(--slate-700);
+  background: var(--slate-50);
+  color: var(--slate-900);
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -156,9 +116,9 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Focus ring for accessibility */
+/* Professional focus ring */
 *:focus-visible {
-  outline: 2px solid var(--electric-violet);
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 2px;
 }

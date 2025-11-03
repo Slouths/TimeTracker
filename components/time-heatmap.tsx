@@ -1,7 +1,5 @@
 'use client'
 
-import { Calendar } from 'lucide-react'
-
 interface TimeEntry {
   id: string
   start_time: string
@@ -30,29 +28,26 @@ export function TimeHeatmap({ entries }: TimeHeatmapProps) {
   // Find max value for color scaling
   const maxValue = Math.max(...Array.from(heatmapData.values()), 1)
 
-  // Helper to get color based on value
+  // Helper to get color based on value (monochromatic slate scale)
   const getColor = (value: number) => {
-    if (value === 0) return 'bg-gray-100'
+    if (value === 0) return 'bg-slate-100'
     const intensity = value / maxValue
-    if (intensity > 0.75) return 'bg-brand-green'
-    if (intensity > 0.5) return 'bg-brand-sky'
-    if (intensity > 0.25) return 'bg-brand-amber'
-    return 'bg-orange-300'
+    if (intensity > 0.75) return 'bg-slate-950'
+    if (intensity > 0.5) return 'bg-slate-700'
+    if (intensity > 0.25) return 'bg-slate-500'
+    return 'bg-slate-300'
   }
 
   // Working hours only (6 AM to 10 PM)
   const hours = Array.from({ length: 16 }, (_, i) => i + 6)
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-      <div className="flex items-center gap-2 mb-6">
-        <Calendar className="h-6 w-6 text-brand-green" />
-        <h3 className="text-xl font-bold text-brand-charcoal">
-          Activity Heatmap
-        </h3>
-      </div>
+    <div className="bg-white rounded-md shadow-md p-6 border border-slate-200">
+      <h3 className="text-lg font-semibold text-slate-950 uppercase tracking-wide mb-4">
+        Activity Heatmap
+      </h3>
 
-      <p className="text-sm text-gray-600 mb-6">
+      <p className="text-xs text-slate-600 mb-6">
         See when you're most productive. Darker colors indicate higher earnings.
       </p>
 
@@ -63,7 +58,7 @@ export function TimeHeatmap({ entries }: TimeHeatmapProps) {
             <div className="w-16 flex-shrink-0"></div>
             <div className="flex gap-1">
               {hours.map((hour) => (
-                <div key={hour} className="w-12 text-center text-xs text-gray-600">
+                <div key={hour} className="w-12 text-center text-xs text-slate-600">
                   {hour <= 12 ? `${hour}a` : `${hour - 12}p`}
                 </div>
               ))}
@@ -73,7 +68,7 @@ export function TimeHeatmap({ entries }: TimeHeatmapProps) {
           {/* Heatmap grid */}
           {days.map((day, dayIndex) => (
             <div key={day} className="flex items-center mb-1">
-              <div className="w-16 flex-shrink-0 text-sm font-medium text-gray-700">
+              <div className="w-16 flex-shrink-0 text-xs font-semibold text-slate-700 uppercase tracking-wide">
                 {day}
               </div>
               <div className="flex gap-1">
@@ -85,11 +80,11 @@ export function TimeHeatmap({ entries }: TimeHeatmapProps) {
                   return (
                     <div
                       key={hour}
-                      className={`w-12 h-10 rounded ${color} flex items-center justify-center text-xs font-semibold transition-all hover:scale-105 cursor-pointer`}
+                      className={`w-12 h-8 rounded ${color} flex items-center justify-center text-xs font-semibold transition-all hover:opacity-80 cursor-pointer border border-slate-200`}
                       title={`${day} ${hour}:00 - $${value.toFixed(2)}`}
                     >
                       {value > 0 && (
-                        <span className="text-white drop-shadow">
+                        <span className="text-white drop-shadow font-mono text-xs">
                           ${value >= 100 ? value.toFixed(0) : value.toFixed(0)}
                         </span>
                       )}
@@ -102,15 +97,15 @@ export function TimeHeatmap({ entries }: TimeHeatmapProps) {
 
           {/* Legend */}
           <div className="mt-6 flex items-center justify-end gap-3">
-            <span className="text-sm text-gray-600">Less</span>
+            <span className="text-xs text-slate-600">Less</span>
             <div className="flex gap-1">
-              <div className="w-6 h-6 rounded bg-gray-100"></div>
-              <div className="w-6 h-6 rounded bg-orange-300"></div>
-              <div className="w-6 h-6 rounded bg-brand-amber"></div>
-              <div className="w-6 h-6 rounded bg-brand-sky"></div>
-              <div className="w-6 h-6 rounded bg-brand-green"></div>
+              <div className="w-5 h-5 rounded bg-slate-100 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-slate-300 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-slate-500 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-slate-700 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-slate-950 border border-slate-200"></div>
             </div>
-            <span className="text-sm text-gray-600">More</span>
+            <span className="text-xs text-slate-600">More</span>
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { SetupBanner } from '@/components/setup-banner'
-import { Clock, FileText, Zap, Shield, Smartphone, Wifi } from 'lucide-react'
+import { Clock, FileText, Zap, Shield, Smartphone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function LandingPage() {
@@ -68,9 +68,6 @@ export default async function LandingPage() {
                 Start Free Trial
               </Button>
             </Link>
-            <Button size="lg" variant="outline" className="text-lg px-8 py-6 w-full sm:w-auto">
-              Watch Demo
-            </Button>
           </div>
           <p className="text-sm text-gray-500 mt-4">
             Free for 14 days. No credit card required.
@@ -157,16 +154,6 @@ export default async function LandingPage() {
               <h3 className="text-xl font-semibold text-brand-charcoal mb-2">Mobile-First</h3>
               <p className="text-gray-600">
                 Works perfectly on your phone. Track time from the job site, not your desk.
-              </p>
-            </div>
-
-            <div className="text-center p-6">
-              <div className="flex items-center justify-center mb-4">
-                <Wifi className="h-12 w-12 text-brand-green" />
-              </div>
-              <h3 className="text-xl font-semibold text-brand-charcoal mb-2">Works Offline</h3>
-              <p className="text-gray-600">
-                Track time even without internet. Syncs automatically when you&apos;re back online.
               </p>
             </div>
 
@@ -321,7 +308,7 @@ export default async function LandingPage() {
                   <svg className="h-6 w-6 text-brand-green mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span className="text-gray-600">Works offline</span>
+                  <span className="text-gray-600">Advanced reporting</span>
                 </li>
                 <li className="flex items-start">
                   <svg className="h-6 w-6 text-brand-green mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -373,7 +360,7 @@ export default async function LandingPage() {
               <span className="text-xl font-bold">TradeTimer</span>
             </div>
             <div className="text-sm text-gray-400">
-              2025 TradeTimer. Built for trade workers, by developers who care.
+              {new Date().getFullYear()} TradeTimer. Built for trade workers, by developers who care.
             </div>
           </div>
         </div>

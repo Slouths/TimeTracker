@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Clock } from 'lucide-react'
@@ -9,12 +9,22 @@ import { createClient } from '@/lib/supabase/client'
 
 export default function SignupPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [referralCode, setReferralCode] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Check for referral code in URL
+    const refCode = searchParams.get('ref')
+    if (refCode) {
+      setReferralCode(refCode)
+    }
+  }, [searchParams])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,6 +48,25 @@ export default function SignupPage() {
       if (signUpError) throw signUpError
 
       if (data.user) {
+        // If there's a referral code, track the referral
+        if (referralCode) {
+          try {
+            // Find the referrer by their referral code
+            // This would need a lookup - for now we'll store the referral code
+            await supabase.from('referrals').insert({
+              referrer_code: referralCode,
+              referred_email: email,
+              referred_user_id: data.user.id,
+              status: 'signed_up',
+              reward_granted: false,
+              created_at: new Date().toISOString()
+            })
+          } catch (refError) {
+            console.error('Failed to track referral:', refError)
+            // Don't block signup if referral tracking fails
+          }
+        }
+
         setSuccess(true)
         // Redirect to dashboard after successful signup
         setTimeout(() => {
@@ -74,6 +103,13 @@ export default function SignupPage() {
             <p className="text-gray-600">
               14 days free. No credit card required.
             </p>
+            {referralCode && (
+              <div className="mt-4 p-3 bg-accent-primary/10 border border-accent-primary/20 rounded-lg">
+                <p className="text-sm text-accent-primary font-medium">
+                  You were referred by a friend!
+                </p>
+              </div>
+            )}
           </div>
 
           {success ? (

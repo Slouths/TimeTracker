@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from '@/lib/toast'
 
 interface TimeEntry {
   id: string
@@ -95,7 +96,7 @@ export function EditTimeEntryModal({
     )
 
     if (durationMinutes <= 0) {
-      alert('End time must be after start time')
+      toast.error('End time must be after start time')
       setLoading(false)
       return
     }
@@ -119,8 +120,9 @@ export function EditTimeEntryModal({
 
     if (error) {
       console.error('Error updating time entry:', error)
-      alert('Failed to update time entry')
+      toast.error('Failed to update time entry', error.message)
     } else {
+      toast.success('Time entry updated!')
       onSaved()
       onClose()
     }

@@ -2,15 +2,21 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Clock, Play, Square, ChevronDown, Check, User, HelpCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { Popover, Transition } from '@headlessui/react'
 import { Fragment } from 'react'
+import { toast } from '@/lib/toast'
 
 interface Client {
   id: string
   name: string
   hourly_rate: number
+}
+
+interface Project {
+  id: string
+  name: string
+  client_id: string
+  status: string
 }
 
 interface TimerProps {
@@ -24,12 +30,23 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [selectedClientId, setSelectedClientId] = useState<string>('')
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
   const [clients, setClients] = useState<Client[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isPaused, setIsPaused] = useState(false)
+  const [pausedAt, setPausedAt] = useState<Date | null>(null)
+  const [totalPausedTime, setTotalPausedTime] = useState(0)
 
   const supabase = createClient()
+
+  // Filter clients based on search query
+  const filteredClients = clients.filter((client) =>
+    client.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -62,18 +79,44 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
     loadClients()
   }, [userId, refreshTrigger, supabase])
 
+  // Load projects for selected client
+  useEffect(() => {
+    async function loadProjects() {
+      if (!selectedClientId) {
+        setProjects([])
+        setSelectedProjectId('')
+        return
+      }
+
+      const { data } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('client_id', selectedClientId)
+        .eq('status', 'active')
+        .order('name')
+
+      if (data) {
+        setProjects(data)
+      } else {
+        setProjects([])
+      }
+    }
+    loadProjects()
+  }, [selectedClientId, userId, supabase])
+
   // Timer tick
   useEffect(() => {
-    if (!isRunning || !startTime) return
+    if (!isRunning || !startTime || isPaused) return
 
     const interval = setInterval(() => {
       const now = new Date()
-      const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000)
+      const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000) - totalPausedTime
       setElapsedSeconds(elapsed)
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [isRunning, startTime])
+  }, [isRunning, startTime, isPaused, totalPausedTime])
 
   const formatTime = useCallback((seconds: number): string => {
     const hours = Math.floor(seconds / 3600)
@@ -85,25 +128,44 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
       .padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }, [])
 
-  const handleStart = () => {
+  const handleStart = useCallback(() => {
     if (!selectedClientId) {
-      alert('Please select a client first!')
+      toast.error('Please select a client first!')
       return
     }
 
     setStartTime(new Date())
     setElapsedSeconds(0)
     setIsRunning(true)
-  }
+    setIsPaused(false)
+    setTotalPausedTime(0)
+  }, [selectedClientId])
 
-  const handleStop = async () => {
+  const handlePause = useCallback(() => {
+    setIsPaused(true)
+    setPausedAt(new Date())
+  }, [])
+
+  const handleResume = useCallback(() => {
+    if (pausedAt) {
+      const now = new Date()
+      const pausedDuration = Math.floor((now.getTime() - pausedAt.getTime()) / 1000)
+      setTotalPausedTime((prev) => prev + pausedDuration)
+    }
+    setIsPaused(false)
+    setPausedAt(null)
+  }, [pausedAt])
+
+  const handleStop = useCallback(async () => {
     if (!startTime || !selectedClientId) return
 
     setLoading(true)
     const endTime = new Date()
-    const durationMinutes = Math.floor(
-      (endTime.getTime() - startTime.getTime()) / 1000 / 60
-    )
+
+    // Calculate duration excluding paused time
+    const totalElapsedSeconds = Math.floor((endTime.getTime() - startTime.getTime()) / 1000)
+    const activeSeconds = totalElapsedSeconds - totalPausedTime
+    const durationMinutes = Math.floor(activeSeconds / 60)
 
     // Get client hourly rate
     const client = clients.find((c) => c.id === selectedClientId)
@@ -115,6 +177,7 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
     const { error } = await supabase.from('time_entries').insert({
       user_id: userId,
       client_id: selectedClientId,
+      project_id: selectedProjectId || null,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       duration_minutes: durationMinutes,
@@ -124,7 +187,7 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
 
     if (error) {
       console.error('Error saving time entry:', error)
-      alert('Failed to save time entry')
+      toast.error('Failed to save time entry', error.message)
     } else {
       // Reset state
       setIsRunning(false)
@@ -132,6 +195,12 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
       setElapsedSeconds(0)
       setNotes('')
       setSelectedClientId('')
+      setSelectedProjectId('')
+      setIsPaused(false)
+      setPausedAt(null)
+      setTotalPausedTime(0)
+
+      toast.success('Time entry saved!', `${formatTime(durationMinutes * 60)} tracked`)
 
       // Notify parent component
       if (onTimeEntrySaved) {
@@ -140,7 +209,56 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
     }
 
     setLoading(false)
-  }
+  }, [startTime, selectedClientId, clients, supabase, userId, notes, onTimeEntrySaved, totalPausedTime, formatTime])
+
+  // Keyboard shortcuts (must be after handleStart and handleStop definitions)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return
+      }
+
+      // Space: Start/Stop timer
+      if (e.code === 'Space') {
+        e.preventDefault()
+        if (isRunning && !isPaused) {
+          handleStop()
+        } else if (!isRunning && selectedClientId && clients.length > 0) {
+          handleStart()
+        }
+      }
+
+      // P: Pause/Resume timer
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault()
+        if (isRunning) {
+          if (isPaused) {
+            handleResume()
+          } else {
+            handlePause()
+          }
+        }
+      }
+
+      // Cmd+K (Mac) or Ctrl+K (Windows): Open client dropdown
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        if (!isRunning) {
+          setIsDropdownOpen(true)
+        }
+      }
+
+      // Escape: Close dropdown
+      if (e.key === 'Escape') {
+        setIsDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isRunning, isPaused, selectedClientId, clients.length, handleStart, handleStop, handlePause, handleResume])
 
   const selectedClient = clients.find((c) => c.id === selectedClientId)
   const estimatedEarnings = selectedClient
@@ -148,28 +266,31 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
     : 0
 
   return (
-    <div className="relative bg-gradient-to-br from-white via-white to-brand-green/5 rounded-2xl shadow-xl p-8 border border-brand-green/10">
-      {/* Subtle accent background */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 rounded-full blur-3xl -z-10 overflow-hidden" />
+    <div className="bg-white border border-slate-200 rounded-md shadow-md p-8">
+      {/* Header */}
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-slate-950 uppercase tracking-wide">Time Tracker</h2>
+      </div>
 
-      {/* Header Row */}
-      <div className="flex items-center gap-3 mb-6">
-        <Clock className="h-8 w-8 text-brand-green flex-shrink-0" />
-        <div className="flex-1">
-          <h2 className="text-2xl font-bold text-brand-charcoal">Time Tracker</h2>
-          <p className="text-sm text-gray-500">Track your billable hours</p>
-        </div>
-        {/* Timer Display inline */}
-        <div className={`text-5xl font-bold font-mono tracking-tight ${isRunning ? 'text-brand-green' : 'text-gray-400'}`}>
+      {/* Timer Display */}
+      <div className={`bg-slate-50 rounded p-8 mb-6 text-center border border-slate-200 relative`}>
+        <div className={`text-6xl md:text-6xl text-4xl font-bold font-mono tracking-tight ${isRunning && !isPaused ? 'text-slate-950' : 'text-slate-400'}`}>
           {formatTime(elapsedSeconds)}
         </div>
+        {isPaused && (
+          <div className="absolute top-3 right-3">
+            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded uppercase tracking-wide">
+              Paused
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Client Selector */}
       <div className="mb-4 relative" data-dropdown>
         {clients.length === 0 ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
-            <p className="text-sm text-amber-800">No clients yet - Add one below</p>
+          <div className="bg-slate-100 border border-slate-200 rounded p-3 text-center">
+            <p className="text-sm text-slate-600">No clients yet - Add one below</p>
           </div>
         ) : (
           <>
@@ -178,60 +299,73 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
               type="button"
               onClick={() => !isRunning && setIsDropdownOpen(!isDropdownOpen)}
               disabled={isRunning}
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-transparent disabled:bg-gray-50 disabled:cursor-not-allowed text-sm flex items-center justify-between transition-all hover:border-brand-green/50"
+              className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent disabled:bg-slate-50 disabled:cursor-not-allowed text-sm flex items-center justify-between transition-colors hover:border-slate-300"
             >
               <div className="flex items-center gap-2">
-                <User className="h-3.5 w-3.5 text-gray-400" />
                 {selectedClientId ? (
-                  <span className="font-medium text-brand-charcoal text-sm flex items-center gap-4">
+                  <span className="font-medium text-slate-900 text-sm flex items-center gap-4">
                     {clients.find((c) => c.id === selectedClientId)?.name}
-                    <span className="text-gray-500 text-xs">
+                    <span className="text-slate-500 text-xs font-mono">
                       ${clients.find((c) => c.id === selectedClientId)?.hourly_rate}/hr
                     </span>
                   </span>
                 ) : (
-                  <span className="text-gray-500 text-sm">Choose a client...</span>
+                  <span className="text-slate-500 text-sm">Choose a client...</span>
                 )}
               </div>
-              <ChevronDown
-                className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${
-                  isDropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
+              <span className={`text-slate-400 text-xs transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}>
+                ▾
+              </span>
             </button>
 
             {/* Custom Dropdown Menu */}
             {isDropdownOpen && !isRunning && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded shadow-md overflow-hidden">
+                {/* Search Input */}
+                {clients.length > 3 && (
+                  <div className="p-2 border-b border-slate-200">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search clients..."
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                      autoFocus
+                    />
+                  </div>
+                )}
                 <div className="max-h-56 overflow-y-auto">
-                  {clients.map((client) => (
+                  {filteredClients.length === 0 ? (
+                    <div className="px-3 py-4 text-center text-sm text-slate-500">
+                      No clients match &quot;{searchQuery}&quot;
+                    </div>
+                  ) : (
+                    filteredClients.map((client) => (
                     <button
                       key={client.id}
                       type="button"
                       onClick={() => {
                         setSelectedClientId(client.id)
                         setIsDropdownOpen(false)
+                        setSearchQuery('')
                       }}
-                      className="w-full px-3 py-2 flex items-center justify-between hover:bg-brand-green/5 transition-colors border-b border-gray-100 last:border-b-0"
+                      className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-brand-green/10 flex items-center justify-center flex-shrink-0">
-                          <User className="h-3 w-3 text-brand-green" />
-                        </div>
                         <div className="text-left">
-                          <div className="font-medium text-brand-charcoal text-sm">
+                          <div className="font-medium text-slate-900 text-sm">
                             {client.name}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-slate-500 font-mono">
                             ${client.hourly_rate}/hr
                           </div>
                         </div>
                       </div>
                       {selectedClientId === client.id && (
-                        <Check className="h-4 w-4 text-brand-green flex-shrink-0" />
+                        <span className="text-accent-primary text-sm">✓</span>
                       )}
                     </button>
-                  ))}
+                  )))}
                 </div>
               </div>
             )}
@@ -239,43 +373,107 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
         )}
       </div>
 
+      {/* Project Selector (shows when client selected) */}
+      {selectedClientId && !isRunning && (
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-slate-600 mb-1 uppercase tracking-wide">
+            Project (Optional)
+          </label>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-primary text-sm"
+          >
+            <option value="">No project</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          {projects.length === 0 && (
+            <p className="text-xs text-slate-500 mt-1">No active projects for this client</p>
+          )}
+        </div>
+      )}
+
       {/* Running Info & Notes */}
       {isRunning && selectedClient && (
-        <div className="mb-4 p-3 bg-brand-green/10 rounded-lg border border-brand-green/20">
+        <div className="mb-4 p-3 bg-slate-50 rounded border border-slate-200">
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="font-semibold text-brand-charcoal">{selectedClient.name}</span>
-            <span className="text-brand-green font-bold">~${estimatedEarnings.toFixed(2)}</span>
+            <span className="font-semibold text-slate-900">
+              {selectedClient.name}
+              {selectedProjectId && projects.find(p => p.id === selectedProjectId) && (
+                <span className="text-slate-600 text-xs ml-2">
+                  • {projects.find(p => p.id === selectedProjectId)?.name}
+                </span>
+              )}
+            </span>
+            <span className="text-slate-950 font-bold font-mono">~${estimatedEarnings.toFixed(2)}</span>
           </div>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Add notes (optional)..."
-            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green text-sm"
+            className="w-full px-3 py-2 bg-white border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-primary text-sm"
           />
         </div>
       )}
 
-      {/* Action Button */}
+      {/* Action Buttons */}
       {!isRunning ? (
         <Button
           onClick={handleStart}
           disabled={clients.length === 0 || !selectedClientId}
-          className="w-full bg-brand-green hover:bg-brand-green/90 text-white py-3 rounded-lg disabled:opacity-50"
+          className="w-full bg-accent-primary hover:bg-accent-primary/90 text-white py-3.5 rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm uppercase tracking-wide"
         >
-          <Play className="h-4 w-4 mr-2" />
           Start Timer
         </Button>
       ) : (
-        <Button
-          onClick={handleStop}
-          disabled={loading}
-          className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg"
-        >
-          <Square className="h-4 w-4 mr-2" />
-          {loading ? 'Saving...' : 'Stop & Save'}
-        </Button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            {!isPaused ? (
+              <Button
+                onClick={handlePause}
+                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-3.5 rounded font-medium transition-colors text-sm uppercase tracking-wide"
+              >
+                Pause
+              </Button>
+            ) : (
+              <Button
+                onClick={handleResume}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3.5 rounded font-medium transition-colors text-sm uppercase tracking-wide"
+              >
+                Resume
+              </Button>
+            )}
+            <Button
+              onClick={handleStop}
+              disabled={loading}
+              className="flex-1 bg-error hover:bg-error/90 text-white py-3.5 rounded font-medium transition-colors text-sm uppercase tracking-wide"
+            >
+              {loading ? 'Saving...' : 'Stop & Save'}
+            </Button>
+          </div>
+        </div>
       )}
+
+      {/* Keyboard Shortcuts Hint */}
+      <div className="mt-4 hidden md:flex items-center justify-center gap-4 text-xs text-slate-600">
+        <div className="flex items-center gap-1.5">
+          <kbd className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-mono">Space</kbd>
+          <span>Start/Stop</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <kbd className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-mono">P</kbd>
+          <span>Pause/Resume</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <kbd className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-mono">⌘K</kbd>
+          <span>Select Client</span>
+        </div>
+      </div>
     </div>
   )
 }
