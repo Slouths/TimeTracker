@@ -1,9 +1,11 @@
 import React from 'react';
+import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { TimerScreen } from '@/screens/timer/TimerScreen';
-import { EntriesScreen } from '@/screens/entries/EntriesScreen';
-import { ClientsScreen } from '@/screens/clients/ClientsScreen';
-import { SettingsScreen } from '@/screens/settings/SettingsScreen';
+import { DashboardStackNavigator } from '@/navigation/DashboardStackNavigator';
+import { EntriesStackNavigator } from '@/navigation/EntriesStackNavigator';
+import { ProjectsStackNavigator } from '@/navigation/ProjectsStackNavigator';
+import { ReportsStackNavigator } from '@/navigation/ReportsStackNavigator';
+import { MoreStackNavigator } from '@/navigation/MoreStackNavigator';
 import { theme } from '@/constants/theme';
 import type { MainTabParamList } from '@/types/navigation';
 
@@ -18,39 +20,54 @@ export const MainTabNavigator = () => {
         tabBarInactiveTintColor: theme.colors.textSecondary,
         tabBarStyle: {
           borderTopColor: theme.colors.border,
+          paddingTop: 8,
+          paddingBottom: 8,
+          height: 60,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
         },
       }}
     >
       <Tab.Screen
-        name="TimerTab"
-        component={TimerScreen}
+        name="DashboardTab"
+        component={DashboardStackNavigator}
         options={{
-          tabBarLabel: 'Timer',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⏱️</Text>,
+          tabBarLabel: 'Dashboard',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>,
         }}
       />
       <Tab.Screen
         name="EntriesTab"
-        component={EntriesScreen}
+        component={EntriesStackNavigator}
         options={{
           tabBarLabel: 'Entries',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📋</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>⏱️</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="ProjectsTab"
+        component={ProjectsStackNavigator}
+        options={{
+          tabBarLabel: 'Projects',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📁</Text>,
         }}
       />
       <Tab.Screen
         name="ReportsTab"
-        component={ClientsScreen}
+        component={ReportsStackNavigator}
         options={{
-          tabBarLabel: 'Clients',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>👥</Text>,
+          tabBarLabel: 'Reports',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📊</Text>,
         }}
       />
       <Tab.Screen
         name="MoreTab"
-        component={SettingsScreen}
+        component={MoreStackNavigator}
         options={{
-          tabBarLabel: 'Settings',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚙️</Text>,
+          tabBarLabel: 'More',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>⋯</Text>,
         }}
       />
     </Tab.Navigator>

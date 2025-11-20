@@ -11,15 +11,16 @@ export type AuthStackParamList = {
 
 // Main Tab Navigation
 export type MainTabParamList = {
-  TimerTab: undefined;
+  DashboardTab: undefined;
   EntriesTab: undefined;
+  ProjectsTab: undefined;
   ReportsTab: undefined;
   MoreTab: undefined;
 };
 
-// Timer Stack
-export type TimerStackParamList = {
-  Timer: undefined;
+// Dashboard Stack
+export type DashboardStackParamList = {
+  Dashboard: undefined;
 };
 
 // Clients Stack
@@ -32,12 +33,17 @@ export type ClientsStackParamList = {
 export type ProjectsStackParamList = {
   Projects: undefined;
   ProjectDetail: { projectId: string };
+  ClientDetail: { clientId: string };
+  CreateProject: undefined;
+  EditProject: { projectId: string };
 };
 
 // Entries Stack
 export type EntriesStackParamList = {
   Entries: undefined;
   EntryDetail: { entryId: string };
+  CreateEntry: undefined;
+  EditEntry: { entryId: string };
 };
 
 // Reports Stack
@@ -81,9 +87,15 @@ export type AuthScreenProps<T extends keyof AuthStackParamList> =
 export type MainTabProps<T extends keyof MainTabParamList> =
   BottomTabScreenProps<MainTabParamList, T>;
 
-export type TimerScreenProps<T extends keyof TimerStackParamList> =
+export type DashboardScreenProps<T extends keyof DashboardStackParamList> =
   CompositeScreenProps<
-    NativeStackScreenProps<TimerStackParamList, T>,
+    NativeStackScreenProps<DashboardStackParamList, T>,
+    BottomTabScreenProps<MainTabParamList>
+  >;
+
+export type ProjectsScreenProps<T extends keyof ProjectsStackParamList> =
+  CompositeScreenProps<
+    NativeStackScreenProps<ProjectsStackParamList, T>,
     BottomTabScreenProps<MainTabParamList>
   >;
 

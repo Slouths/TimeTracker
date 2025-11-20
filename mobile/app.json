@@ -4,15 +4,8 @@
     "slug": "tradetimer",
     "version": "1.0.0",
     "owner": "your-expo-username",
-    "privacy": "unlisted",
     "orientation": "portrait",
-    "icon": "./src/assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./src/assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0369a1"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -20,7 +13,6 @@
       "bundleIdentifier": "com.tradetimer.app",
       "buildNumber": "1",
       "supportsTablet": true,
-      "icon": "./src/assets/icon.png",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to securely login to your TradeTimer account",
         "NSCameraUsageDescription": "Take photos for time entry notes (optional feature)",
@@ -33,19 +25,13 @@
     "android": {
       "package": "com.tradetimer.app",
       "versionCode": 1,
-      "adaptiveIcon": {
-        "foregroundImage": "./src/assets/adaptive-icon.png",
-        "backgroundColor": "#0369a1"
-      },
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
         "VIBRATE"
       ]
     },
-    "web": {
-      "favicon": "./src/assets/favicon.png"
-    },
+    "web": {},
     "plugins": [
       "expo-notifications",
       [
@@ -53,7 +39,9 @@
         {
           "faceIDPermission": "Allow TradeTimer to use Face ID."
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "eas": {

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authService } from '@/services/supabase/auth';
+import { logger } from '@/utils/logger';
 import type { User } from '@/types/models';
 
 interface AuthState {
@@ -20,9 +21,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
 
   initialize: async () => {
+    logger.info('Auth', 'Initialization started');
     try {
+      logger.debug('Auth', 'Fetching session from Supabase');
       const { data } = await authService.getSession();
+
       if (data.session?.user) {
+        logger.info('Auth', 'Session found - user authenticated', { userId: data.session.user.id });
         set({
           user: {
             id: data.session.user.id,
@@ -34,10 +39,11 @@ export const useAuthStore = create<AuthState>((set) => ({
           isLoading: false,
         });
       } else {
+        logger.info('Auth', 'No active session found');
         set({ user: null, isAuthenticated: false, isLoading: false });
       }
     } catch (error) {
-      console.error('Error initializing auth:', error);
+      logger.error('Auth', 'Initialization failed', error);
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },

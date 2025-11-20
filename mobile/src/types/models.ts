@@ -3,6 +3,8 @@ export interface Client {
   user_id: string;
   name: string;
   email: string | null;
+  phone?: string | null;
+  company?: string | null;
   hourly_rate: number;
   created_at: string;
 }
@@ -15,6 +17,7 @@ export interface Project {
   description: string | null;
   status: 'active' | 'completed' | 'on_hold';
   budget_hours: number | null;
+  hourly_rate?: number | null;
   color: string | null;
   created_at: string;
 }
@@ -27,8 +30,12 @@ export interface TimeEntry {
   start_time: string;
   end_time: string;
   duration_minutes: number;
+  duration?: number; // hours (computed from duration_minutes)
   notes: string | null;
+  description?: string | null; // alias for notes
   amount: number;
+  billable_amount?: number; // alias for amount
+  invoice_id?: string | null; // For invoice linking
   created_at: string;
 }
 
@@ -41,8 +48,9 @@ export interface Invoice {
   due_date: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue';
   subtotal: number;
-  tax_rate: number;
-  tax_amount: number;
+  tax?: number; // Optional for backwards compatibility
+  tax_rate?: number; // Optional
+  tax_amount?: number; // Optional
   total: number;
   notes: string | null;
   created_at: string;
