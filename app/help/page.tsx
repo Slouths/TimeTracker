@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { HelpCircle } from 'lucide-react'
 import { FAQSection } from '@/components/help/faq-section'
 import { ContactForm } from '@/components/help/contact-form'
 import { Navigation } from '@/components/layout/navigation'
@@ -39,7 +38,7 @@ export default async function HelpPage() {
         <div className="mt-16 bg-slate-50 rounded-2xl p-8 border border-slate-200">
           <h2 className="text-2xl font-bold mb-2 text-brand-charcoal">Still need help?</h2>
           <p className="text-gray-600 mb-6">
-            Can't find what you're looking for? Send us a message and we'll get back to you within 24 hours.
+            Can&apos;t find what you&apos;re looking for? Send us a message and we&apos;ll get back to you within 24 hours.
           </p>
           <ContactForm />
         </div>

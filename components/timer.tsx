@@ -458,22 +458,6 @@ export function Timer({ userId, onTimeEntrySaved, refreshTrigger = 0 }: TimerPro
           </div>
         </div>
       )}
-
-      {/* Keyboard Shortcuts Hint */}
-      <div className="mt-4 hidden md:flex items-center justify-center gap-4 text-xs text-slate-600">
-        <div className="flex items-center gap-1.5">
-          <kbd className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-mono">Space</kbd>
-          <span>Start/Stop</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <kbd className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-mono">P</kbd>
-          <span>Pause/Resume</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <kbd className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-mono">⌘K</kbd>
-          <span>Select Client</span>
-        </div>
-      </div>
     </div>
   )
 }

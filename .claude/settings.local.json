@@ -7,7 +7,11 @@
       "Bash(npm install:*)",
       "Bash(tree:*)",
       "Bash(git rm:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(cat .env.local)",
+      "Bash(if exist .next rmdir /s /q .next)"
     ],
     "deny": [],
     "ask": []

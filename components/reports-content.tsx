@@ -455,17 +455,15 @@ export function ReportsContent({ userId }: ReportsContentProps) {
   return (
     <div className="space-y-6">
       {/* Actions Bar */}
-      <div className="flex justify-end items-center gap-3 flex-wrap">
+      <div className="flex justify-end items-center gap-2 flex-wrap">
         <div className="relative">
-          <Button
+          <button
             onClick={() => setShowSavedFiltersDropdown(!showSavedFiltersDropdown)}
-            variant="outline"
-            size="lg"
-            className="border-slate-300 text-slate-700 hover:bg-slate-100"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md border border-slate-200 transition-colors"
           >
-            <Filter className="h-5 w-5 mr-2" />
+            <Filter className="h-4 w-4" />
             Saved Filters
-          </Button>
+          </button>
           {showSavedFiltersDropdown && (
             <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-10">
               {savedFilters.length === 0 ? (
@@ -499,41 +497,34 @@ export function ReportsContent({ userId }: ReportsContentProps) {
             </div>
           )}
         </div>
-        <Button
+        <button
           onClick={() => setShowSaveFilterModal(true)}
-          variant="outline"
-          size="lg"
-          className="border-slate-300 text-slate-700 hover:bg-slate-100"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md border border-slate-200 transition-colors"
         >
-          <Save className="h-5 w-5 mr-2" />
+          <Save className="h-4 w-4" />
           Save Current Filter
-        </Button>
-        <Button
+        </button>
+        <button
           onClick={exportToCSV}
-          variant="outline"
-          size="lg"
-          className="border-accent-primary text-accent-primary hover:bg-accent-primary/10"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-accent-primary hover:text-accent-primary/80 hover:bg-accent-primary/5 rounded-md border border-accent-primary/30 transition-colors"
         >
-          <FileSpreadsheet className="h-5 w-5 mr-2" />
+          <FileSpreadsheet className="h-4 w-4" />
           Export CSV
-        </Button>
-        <Button
+        </button>
+        <button
           onClick={exportToPDF}
-          variant="outline"
-          size="lg"
-          className="border-brand-green text-brand-green hover:bg-brand-green/10"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-brand-green hover:text-brand-green/80 hover:bg-brand-green/5 rounded-md border border-brand-green/30 transition-colors"
         >
-          <Download className="h-5 w-5 mr-2" />
+          <Download className="h-4 w-4" />
           Export Report
-        </Button>
-        <Button
+        </button>
+        <button
           onClick={() => setShowInvoiceGenerator(true)}
-          className="bg-brand-green hover:bg-brand-green/90 text-white"
-          size="lg"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-brand-green hover:bg-brand-green/90 rounded-md border border-brand-green transition-colors"
         >
-          <FileText className="h-5 w-5 mr-2" />
+          <FileText className="h-4 w-4" />
           Generate Invoice
-        </Button>
+        </button>
       </div>
 
       {/* Time Period Filters */}

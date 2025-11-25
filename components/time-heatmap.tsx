@@ -28,14 +28,14 @@ export function TimeHeatmap({ entries }: TimeHeatmapProps) {
   // Find max value for color scaling
   const maxValue = Math.max(...Array.from(heatmapData.values()), 1)
 
-  // Helper to get color based on value (monochromatic slate scale)
+  // Helper to get color based on value (green gradient for earnings)
   const getColor = (value: number) => {
-    if (value === 0) return 'bg-slate-100'
+    if (value === 0) return 'bg-slate-50'
     const intensity = value / maxValue
-    if (intensity > 0.75) return 'bg-slate-950'
-    if (intensity > 0.5) return 'bg-slate-700'
-    if (intensity > 0.25) return 'bg-slate-500'
-    return 'bg-slate-300'
+    if (intensity > 0.75) return 'bg-emerald-600'
+    if (intensity > 0.5) return 'bg-emerald-500'
+    if (intensity > 0.25) return 'bg-emerald-400'
+    return 'bg-emerald-200'
   }
 
   // Working hours only (6 AM to 10 PM)
@@ -99,11 +99,11 @@ export function TimeHeatmap({ entries }: TimeHeatmapProps) {
           <div className="mt-6 flex items-center justify-end gap-3">
             <span className="text-xs text-slate-600">Less</span>
             <div className="flex gap-1">
-              <div className="w-5 h-5 rounded bg-slate-100 border border-slate-200"></div>
-              <div className="w-5 h-5 rounded bg-slate-300 border border-slate-200"></div>
-              <div className="w-5 h-5 rounded bg-slate-500 border border-slate-200"></div>
-              <div className="w-5 h-5 rounded bg-slate-700 border border-slate-200"></div>
-              <div className="w-5 h-5 rounded bg-slate-950 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-slate-50 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-emerald-200 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-emerald-400 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-emerald-500 border border-slate-200"></div>
+              <div className="w-5 h-5 rounded bg-emerald-600 border border-slate-200"></div>
             </div>
             <span className="text-xs text-slate-600">More</span>
           </div>

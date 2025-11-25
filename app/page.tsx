@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { SetupBanner } from '@/components/setup-banner'
+import { HeroCarousel } from '@/components/hero-carousel'
 import { Clock, FileText, Zap, Shield, Smartphone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 
@@ -74,15 +75,9 @@ export default async function LandingPage() {
           </p>
         </div>
 
-        {/* Hero Image Placeholder */}
+        {/* Hero Image Carousel */}
         <div className="mt-16 max-w-4xl mx-auto">
-          <div className="bg-gradient-to-br from-brand-green to-brand-sky rounded-2xl shadow-2xl p-8 aspect-video flex items-center justify-center">
-            <div className="text-center text-white">
-              <Smartphone className="h-24 w-24 mx-auto mb-4 opacity-80" />
-              <p className="text-xl font-semibold">Mobile-First Design</p>
-              <p className="text-sm opacity-80">Works perfectly on your phone</p>
-            </div>
-          </div>
+          <HeroCarousel />
         </div>
       </section>
 
@@ -354,11 +349,7 @@ export default async function LandingPage() {
       {/* Footer */}
       <footer className="bg-brand-charcoal text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="flex items-center gap-2 mb-4 md:mb-0">
-              <Clock className="h-6 w-6 text-brand-green" />
-              <span className="text-xl font-bold">TradeTimer</span>
-            </div>
+          <div className="flex flex-col items-center justify-center text-center">
             <div className="text-sm text-gray-400">
               {new Date().getFullYear()} TradeTimer. Built for trade workers, by developers who care.
             </div>
